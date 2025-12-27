@@ -1,0 +1,15 @@
+
+html, body { margin: 0; height: 100%; }
+#map { height: 100%; }
+#controls {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: white;
+  padding: 10px;
+  z-index: 1000;
+  box-shadow: 0 0 6px rgba(0,0,0,0.3);
+  font-family: sans-serif;
+  width: 220px;
+}
+select, button { width: 100%; margin: 4px 0; }
