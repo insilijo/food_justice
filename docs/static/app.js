@@ -102,6 +102,16 @@ function getBreaks(meta) {
   }
 }
 
+function layerRange(data) {
+  const vals = [];
+  data.features.forEach(f => {
+    const v = Number(f.properties.coverage_pct);
+    if (!isNaN(v)) vals.push(v);
+  });
+  if (!vals.length) return { min: 0, max: 1 };
+  return { min: Math.min(...vals), max: Math.max(...vals) };
+}
+
 function loadLayer() {
   if (!state.metro || !state.geo || !state.mode || !state.minutes) return;
 
@@ -112,17 +122,17 @@ function loadLayer() {
   }
 
   const meta = manifest.metros[state.metro];
-  const breaks = getBreaks(meta);
   const path = `data/${state.metro}/${state.geo}_${state.mode}_${state.minutes}.geojson`;
 
   fetch(path)
     .then(r => r.json())
     .then(data => {
+      const range = layerRange(data);
       currentLayer = L.geoJSON(data, {
         style: f => {
           const x = Number(f.properties.coverage_pct);
           return {
-            fillColor: color(x, breaks),
+            fillColor: color(x, range),
             fillOpacity: 0.7,
             color: "#333",
             weight: 0.4
@@ -140,17 +150,25 @@ function loadLayer() {
     });
 }
 
-function color(x, breaks) {
+function color(x, range) {
   if (isNaN(x)) return "#000";
-  if (breaks) {
-    const [t1, t2] = breaks;
-    if (x > t2) return "#1a9850";
-    if (x > t1) return "#fee08b";
-    return "#d73027";
-  }
-  if (x > 0.75) return "#1a9850";
-  if (x > 0.4) return "#fee08b";
-  return "#d73027";
+  const min = range?.min ?? 0;
+  const max = range?.max ?? 1;
+  const denom = max - min;
+  const t = denom > 0 ? (x - min) / denom : 0;
+  const pct = Math.max(0, Math.min(1, t));
+  return lerpColor("#b10026", "#006837", pct);
+}
+
+function lerpColor(a, b, t) {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ar = (pa >> 16) & 255, ag = (pa >> 8) & 255, ab = pa & 255;
+  const br = (pb >> 16) & 255, bg = (pb >> 8) & 255, bb = pb & 255;
+  const rr = Math.round(ar + (br - ar) * t);
+  const rg = Math.round(ag + (bg - ag) * t);
+  const rb = Math.round(ab + (bb - ab) * t);
+  return `rgb(${rr},${rg},${rb})`;
 }
 
 document.getElementById("downloadBtn").onclick = () => {
