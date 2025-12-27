@@ -1,0 +1,244 @@
+{
+  "metros": {
+    "new_york_ny_nj": {
+      "name": "New York–Newark–Jersey City, NY-NJ MSA",
+      "places": ["New York, NY, USA", "Newark, NJ, USA", "Jersey City, NJ, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "los_angeles_ca": {
+      "name": "Los Angeles–Long Beach–Anaheim, CA MSA",
+      "places": ["Los Angeles, CA, USA", "Long Beach, CA, USA", "Anaheim, CA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "chicago_il_in": {
+      "name": "Chicago–Naperville–Elgin, IL-IN MSA",
+      "places": ["Chicago, IL, USA", "Naperville, IL, USA", "Elgin, IL, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "dallas_fort_worth_tx": {
+      "name": "Dallas–Fort Worth–Arlington, TX MSA",
+      "places": ["Dallas, TX, USA", "Fort Worth, TX, USA", "Arlington, TX, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "houston_tx": {
+      "name": "Houston–Pasadena–The Woodlands, TX MSA",
+      "places": ["Houston, TX, USA", "Pasadena, TX, USA", "The Woodlands, TX, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "miami_fl": {
+      "name": "Miami–Fort Lauderdale–West Palm Beach, FL MSA",
+      "places": ["Miami, FL, USA", "Fort Lauderdale, FL, USA", "West Palm Beach, FL, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "washington_dc_va_md_wv": {
+      "name": "Washington–Arlington–Alexandria, DC-VA-MD-WV MSA",
+      "places": ["Washington, DC, USA", "Arlington, VA, USA", "Alexandria, VA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "atlanta_ga": {
+      "name": "Atlanta–Sandy Springs–Roswell, GA MSA",
+      "places": ["Atlanta, GA, USA", "Sandy Springs, GA, USA", "Roswell, GA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "philadelphia_pa_nj_de_md": {
+      "name": "Philadelphia–Camden–Wilmington, PA-NJ-DE-MD MSA",
+      "places": ["Philadelphia, PA, USA", "Camden, NJ, USA", "Wilmington, DE, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "phoenix_az": {
+      "name": "Phoenix–Mesa–Chandler, AZ MSA",
+      "places": ["Phoenix, AZ, USA", "Mesa, AZ, USA", "Chandler, AZ, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "boston_ma_nh": {
+      "name": "Boston–Cambridge–Newton, MA-NH MSA",
+      "places": ["Boston, MA, USA", "Cambridge, MA, USA", "Newton, MA, USA"],
+      "zoom": 11,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "riverside_san_bernardino_ca": {
+      "name": "Riverside–San Bernardino–Ontario, CA MSA",
+      "places": ["Riverside, CA, USA", "San Bernardino, CA, USA", "Ontario, CA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "san_francisco_bay_ca": {
+      "name": "San Francisco–Oakland–Fremont, CA MSA",
+      "places": ["San Francisco, CA, USA", "Oakland, CA, USA", "Fremont, CA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "detroit_mi": {
+      "name": "Detroit–Warren–Dearborn, MI MSA",
+      "places": ["Detroit, MI, USA", "Warren, MI, USA", "Dearborn, MI, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "seattle_wa": {
+      "name": "Seattle–Tacoma–Bellevue, WA MSA",
+      "places": ["Seattle, WA, USA", "Tacoma, WA, USA", "Bellevue, WA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "minneapolis_st_paul_mn_wi": {
+      "name": "Minneapolis–St. Paul–Bloomington, MN-WI MSA",
+      "places": ["Minneapolis, MN, USA", "Saint Paul, MN, USA", "Bloomington, MN, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "tampa_fl": {
+      "name": "Tampa–St. Petersburg–Clearwater, FL MSA",
+      "places": ["Tampa, FL, USA", "Saint Petersburg, FL, USA", "Clearwater, FL, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "san_diego_ca": {
+      "name": "San Diego–Chula Vista–Carlsbad, CA MSA",
+      "places": ["San Diego, CA, USA", "Chula Vista, CA, USA", "Carlsbad, CA, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "denver_co": {
+      "name": "Denver–Aurora–Centennial, CO MSA",
+      "places": ["Denver, CO, USA", "Aurora, CO, USA", "Centennial, CO, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    },
+    "orlando_fl": {
+      "name": "Orlando–Kissimmee–Sanford, FL MSA",
+      "places": ["Orlando, FL, USA", "Kissimmee, FL, USA", "Sanford, FL, USA"],
+      "zoom": 10,
+      "counties": [],
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      }
+    }
+  }
+}

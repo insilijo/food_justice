@@ -1,0 +1,19 @@
+{
+    "metros": {
+        "boston_ma_nh": {
+            "name": "Boston\u2013Cambridge\u2013Newton, MA-NH MSA",
+            "places": [
+                "Boston, MA, USA",
+                "Cambridge, MA, USA",
+                "Newton, MA, USA"
+            ],
+            "zoom": 11,
+            "boundaries": {
+                "zcta_path": "data_inputs/zcta_us.gpkg",
+                "zcta_id": "ZCTA5CE10",
+                "tract_path": "data_inputs/tracts_us.gpkg",
+                "tract_id": "GEOID"
+            }
+        }
+    }
+}
