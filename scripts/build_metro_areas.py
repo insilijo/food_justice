@@ -202,6 +202,13 @@ def metro_boundary_from_places(place_names: list[str]) -> gpd.GeoDataFrame:
     geom = unary_union([g.geometry.values[0] for g in gdfs])
     return gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[geom], crs="EPSG:4326")
 
+def buffer_polygon_km(poly_4326, buffer_km: float):
+    if not buffer_km or buffer_km <= 0:
+        return poly_4326
+    series = gpd.GeoSeries([poly_4326], crs="EPSG:4326").to_crs(3857)
+    buffered = series.buffer(buffer_km * 1000).to_crs(4326).iloc[0]
+    return buffered
+
 # ---------------- Main build per metro ----------------
 
 def build_one_metro(
@@ -225,8 +232,13 @@ def build_one_metro(
     info("Metro boundary saved.")
 
     # 2) Walking network
+    osm_buffer_km = float(meta.get("osm_buffer_km", 0) or 0)
+    osm_poly_4326 = buffer_polygon_km(metro_poly_4326, osm_buffer_km)
+    if osm_buffer_km > 0:
+        info(f"Using OSM buffer: +{osm_buffer_km:.1f} km for network + POI pulls.")
+
     info("Downloading walking network from OSM...")
-    G = ox.graph_from_polygon(metro_poly_4326, network_type="walk", simplify=True)
+    G = ox.graph_from_polygon(osm_poly_4326, network_type="walk", simplify=True)
     G = ox.project_graph(G)
     G = add_travel_time(G)
     crs_proj = G.graph["crs"]
@@ -234,8 +246,8 @@ def build_one_metro(
 
     # 3) OSM points
     info("Fetching grocery + transit points from OSM...")
-    groceries = get_osm_groceries(metro_poly_4326).to_crs(crs_proj)
-    transit = get_osm_transit(metro_poly_4326).to_crs(crs_proj)
+    groceries = get_osm_groceries(osm_poly_4326).to_crs(crs_proj)
+    transit = get_osm_transit(osm_poly_4326).to_crs(crs_proj)
     info(f"Groceries: {len(groceries):,} points; Transit: {len(transit):,} points")
 
     # Vectorized nearest node lookup (much faster than Python loops)

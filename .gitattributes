@@ -1,3 +1,4 @@
+# Large data files (keep code/docs out of LFS)
 data_inputs/**/*.gpkg filter=lfs diff=lfs merge=lfs -text
 data_inputs/**/*.zip filter=lfs diff=lfs merge=lfs -text
 data_inputs/**/*.shp filter=lfs diff=lfs merge=lfs -text
@@ -5,5 +6,6 @@ data_inputs/**/*.shx filter=lfs diff=lfs merge=lfs -text
 data_inputs/**/*.dbf filter=lfs diff=lfs merge=lfs -text
 data_inputs/**/*.parquet filter=lfs diff=lfs merge=lfs -text
 data_inputs/**/*.pbf filter=lfs diff=lfs merge=lfs -text
+
 MBTA_GTFS/**/*.zip filter=lfs diff=lfs merge=lfs -text
 MBTA_GTFS/**/* filter=lfs diff=lfs merge=lfs -text

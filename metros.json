@@ -4,9 +4,12 @@
             "name": "Boston\u2013Cambridge\u2013Newton, MA-NH MSA",
             "places": [
                 "Boston, MA, USA",
+                "Brookline, MA, USA",
                 "Cambridge, MA, USA",
-                "Newton, MA, USA"
+                "Newton, MA, USA",
+                "Somerville, MA, USA"
             ],
+            "osm_buffer_km": 10,
             "zoom": 11,
             "boundaries": {
                 "zcta_path": "data_inputs/zcta_us.gpkg",
