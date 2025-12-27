@@ -170,6 +170,10 @@ def export_layer(gdf_proj: gpd.GeoDataFrame, out_geojson: Path, out_csv: Path, i
     out = gdf_proj.to_crs(4326).copy()
     print(out.head(2))
     keep = [id_col, "POPULATION", "coverage_pct", "pop_with_access", "geometry"]
+    if set(keep) - set(out.columns):
+        missing = set(keep) - set(out.columns)
+        warn(ValueError(f"Missing columns for export: {missing}"))
+        return
     out = out[keep].rename(columns={id_col: "GEOID"})
     out["GEOID"] = out["GEOID"].astype(str)
     out.to_file(out_geojson, driver="GeoJSON")
