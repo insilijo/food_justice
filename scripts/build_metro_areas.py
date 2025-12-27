@@ -29,6 +29,7 @@ import geopandas as gpd
 import osmnx as ox
 import networkx as nx
 import requests
+from pyproj import CRS, Transformer
 from shapely.ops import unary_union
 from tqdm.auto import tqdm
 
@@ -51,16 +52,21 @@ def add_travel_time(G: nx.MultiDiGraph) -> nx.MultiDiGraph:
         data["travel_time"] = length / WALK_METERS_PER_MIN
     return G
 
-def ego_isochrone_union(G: nx.MultiDiGraph, center_nodes: list[int], minutes: int, desc: str) :
+def ego_isochrone_union(
+    G: nx.MultiDiGraph,
+    center_nodes: list[int],
+    minutes: int,
+    desc: str,
+    max_seeds: int = 800,
+):
     """
     Fast-ish isochrone union: for each seed node, take ego graph within travel_time radius,
     build convex hull of node points, union all hulls.
     """
     import random
-    MAX_TRANSIT = 800
-    if len(center_nodes) > MAX_TRANSIT:
-        center_nodes = random.sample(center_nodes, MAX_TRANSIT)
-        info(f"Capped transit seeds to {MAX_TRANSIT}")
+    if max_seeds and len(center_nodes) > max_seeds:
+        center_nodes = random.sample(center_nodes, max_seeds)
+        info(f"Capped seeds to {max_seeds}")
 
     if not center_nodes:
         return None
@@ -75,7 +81,10 @@ def ego_isochrone_union(G: nx.MultiDiGraph, center_nodes: list[int], minutes: in
         # Convex hull of node cloud (fast). Replace w/ alpha shape for nicer isochrones.
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
-        poly = gpd.GeoSeries(gpd.points_from_xy(xs, ys), crs=G.graph["crs"]).unary_union.convex_hull
+        poly = gpd.GeoSeries(
+            gpd.points_from_xy(xs, ys),
+            crs=G.graph["crs"],
+        ).union_all().convex_hull
         polys.append(poly)
 
     if not polys:
@@ -163,12 +172,18 @@ def compute_coverage(boundaries_gdf: gpd.GeoDataFrame, access_poly):
     return g
 
 def quantile_breaks(gdf: gpd.GeoDataFrame, col: str = "coverage_pct") -> list[float]:
-    s = pd.to_numeric(gdf[col], errors="coerce").fillna(0)
-    return [float(s.quantile(0.33)), float(s.quantile(0.66))]
+    s = pd.to_numeric(gdf[col], errors="coerce")
+    s = s[pd.notna(s)]
+    if s.empty:
+        return [0.0, 0.0]
+    q33 = float(s.quantile(0.33))
+    q66 = float(s.quantile(0.66))
+    if not (pd.notna(q33) and pd.notna(q66)):
+        return [0.0, 0.0]
+    return [q33, q66]
 
 def export_layer(gdf_proj: gpd.GeoDataFrame, out_geojson: Path, out_csv: Path, id_col: str):
     out = gdf_proj.to_crs(4326).copy()
-    print(out.head(2))
     keep = [id_col, "POPULATION", "coverage_pct", "pop_with_access", "geometry"]
     if set(keep) - set(out.columns):
         missing = set(keep) - set(out.columns)
@@ -189,7 +204,15 @@ def metro_boundary_from_places(place_names: list[str]) -> gpd.GeoDataFrame:
 
 # ---------------- Main build per metro ----------------
 
-def build_one_metro(slug: str, meta: dict, out_root: str, year: int, api_key: str, minutes_list: list[int]) -> None:
+def build_one_metro(
+    slug: str,
+    meta: dict,
+    out_root: str,
+    year: int,
+    api_key: str,
+    minutes_list: list[int],
+    max_seeds: int,
+) -> None:
     out_dir = Path(out_root) / slug
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -243,22 +266,49 @@ def build_one_metro(slug: str, meta: dict, out_root: str, year: int, api_key: st
 
     info("Loading and clipping boundaries to metro...")
 
-    # Project metro polygon once
+    # Project metro polygon once; keep both CRS for bbox + spatial ops.
+    metro_geom_4326 = metro_gdf.geometry.values[0]
+    minx, miny, maxx, maxy = metro_geom_4326.bounds
+
     metro_proj = metro_gdf.to_crs(crs_proj)
     metro_geom = metro_proj.geometry.values[0]
-    minx, miny, maxx, maxy = metro_geom.bounds
 
-    def load_prefilter(path: str, crs_proj, bbox):
+    def load_prefilter(path: str, crs_proj, bbox_4326):
         """
-        Read with bbox prefilter (pyogrio/fiona supports bbox),
+        Read with bbox prefilter (bbox must be in the source CRS),
         then project.
         """
+        bbox = bbox_4326
+        src_crs = None
+        try:
+            import fiona
+            with fiona.open(path) as src:
+                src_crs = CRS.from_user_input(src.crs_wkt or src.crs)
+        except Exception:
+            src_crs = None
+
+        if src_crs and src_crs != CRS.from_epsg(4326):
+            try:
+                transformer = Transformer.from_crs(4326, src_crs, always_xy=True)
+                minx, miny = transformer.transform(bbox_4326[0], bbox_4326[1])
+                maxx, maxy = transformer.transform(bbox_4326[2], bbox_4326[3])
+                bbox = (minx, miny, maxx, maxy)
+            except Exception:
+                bbox = bbox_4326
+
         g = gpd.read_file(path, bbox=bbox)  # HUGE win vs reading whole file
+        if g.empty:
+            warn(f"{Path(path).name}: bbox prefilter returned 0 features; retrying without bbox.")
+            g = gpd.read_file(path)
         return g.to_crs(crs_proj)
 
     # 1) Read only features near the metro (bbox filter at I/O time)
     zips_raw = load_prefilter(zcta_path, crs_proj, (minx, miny, maxx, maxy))
     tracts_raw = load_prefilter(tract_path, crs_proj, (minx, miny, maxx, maxy))
+    if zips_raw.empty:
+        warn("ZIP prefilter returned 0 features; check ZCTA CRS vs metro bbox CRS.")
+    if tracts_raw.empty:
+        warn("Tract prefilter returned 0 features; check tract CRS vs metro bbox CRS.")
 
     # 2) Keep only geometries that actually intersect metro (cheap filter)
     zips_raw = zips_raw[zips_raw.intersects(metro_geom)]
@@ -277,6 +327,17 @@ def build_one_metro(slug: str, meta: dict, out_root: str, year: int, api_key: st
 
     # 5) Tract population via counties derived from GEOIDs
     info("Deriving counties from tract GEOIDs and fetching tract population (ACS)...")
+    if tract_id not in tracts.columns:
+        if {"STATEFP", "COUNTYFP", "TRACTCE"} <= set(tracts.columns):
+            tracts[tract_id] = (
+                tracts["STATEFP"].astype(str).str.zfill(2)
+                + tracts["COUNTYFP"].astype(str).str.zfill(3)
+                + tracts["TRACTCE"].astype(str).str.zfill(6)
+            )
+            warn(f"{slug}: derived {tract_id} from STATEFP/COUNTYFP/TRACTCE")
+        else:
+            raise ValueError(f"Missing {tract_id} and cannot derive from STATEFP/COUNTYFP/TRACTCE")
+
     tracts[tract_id] = tracts[tract_id].astype(str).str.zfill(11)
     uniq_counties = derive_unique_counties_from_tracts(tracts, tract_id)
     info(f"Unique counties in metro: {len(uniq_counties)}")
@@ -313,14 +374,26 @@ def build_one_metro(slug: str, meta: dict, out_root: str, year: int, api_key: st
 
     # 7) Transit proxy access (5-min to transit)
     info("Computing transit proxy access (5-min walk to transit)...")
-    transit_access_5 = ego_isochrone_union(G, transit_nodes, minutes=5, desc="Isochrone 5 min (transit proxy)")
+    transit_access_5 = ego_isochrone_union(
+        G,
+        transit_nodes,
+        minutes=5,
+        desc="Isochrone 5 min (transit proxy)",
+        max_seeds=max_seeds,
+    )
 
     # 8) Compute and export layers + breaks
     breaks = {"zip": {"walk": {}, "walk_transit": {}}, "tract": {"walk": {}, "walk_transit": {}}}
 
     for mins in minutes_list:
         info(f"Computing walk access isochrone union (minutes={mins})...")
-        walk_access = ego_isochrone_union(G, groceries_nodes, minutes=mins, desc=f"Isochrone {mins} min (groceries)")
+        walk_access = ego_isochrone_union(
+            G,
+            groceries_nodes,
+            minutes=mins,
+            desc=f"Isochrone {mins} min (groceries)",
+            max_seeds=max_seeds,
+        )
 
         info(f"Computing walk+transit proxy union (minutes={mins})...")
         walk_transit_access = (
@@ -366,13 +439,14 @@ def main():
     ap.add_argument("--year", type=int, default=2020, help="ACS 5-year year (e.g., 2020)")
     ap.add_argument("--census-key", required=True, help="Census API key")
     ap.add_argument("--minutes", default="10,15,20", help="Comma-separated minutes thresholds")
+    ap.add_argument("--max-seeds", type=int, default=800, help="Max seed nodes for isochrone unions (0 = no cap)")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
     minutes_list = [int(x.strip()) for x in args.minutes.split(",") if x.strip()]
 
     for slug, meta in cfg["metros"].items():
-        build_one_metro(slug, meta, args.out, args.year, args.census_key, minutes_list)
+        build_one_metro(slug, meta, args.out, args.year, args.census_key, minutes_list, args.max_seeds)
 
 if __name__ == "__main__":
     main()
