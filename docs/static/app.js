@@ -7,7 +7,16 @@ let state = {
   mode: null,
   minutes: null,
   fillOpacity: 0.7,
-  strokeOpacity: 0.6
+  strokeOpacity: 0.6,
+  range: { min: 0, max: 1 },
+  colorStops: {
+    low: 0,
+    mid: 0.5,
+    high: 1,
+    colorLow: "#b10026",
+    colorMid: "#ffffbf",
+    colorHigh: "#006837"
+  }
 };
 
 fetch("data/manifest.json")
@@ -17,6 +26,12 @@ fetch("data/manifest.json")
 function initUI() {
   const fillOpacity = document.getElementById("fillOpacity");
   const strokeOpacity = document.getElementById("strokeOpacity");
+  const colorLow = document.getElementById("colorLow");
+  const colorMid = document.getElementById("colorMid");
+  const colorHigh = document.getElementById("colorHigh");
+  const stopLow = document.getElementById("stopLow");
+  const stopMid = document.getElementById("stopMid");
+  const stopHigh = document.getElementById("stopHigh");
 
   fillOpacity.oninput = e => {
     state.fillOpacity = Number(e.target.value);
@@ -26,6 +41,34 @@ function initUI() {
     state.strokeOpacity = Number(e.target.value);
     if (currentLayer) currentLayer.setStyle({ opacity: state.strokeOpacity });
   };
+
+  function normalizeStops() {
+    let low = Number(stopLow.value) / 100;
+    let mid = Number(stopMid.value) / 100;
+    let high = Number(stopHigh.value) / 100;
+    low = Math.max(0, Math.min(0.98, low));
+    high = Math.max(0.02, Math.min(1, high));
+    if (high <= low) high = Math.min(1, low + 0.02);
+    mid = Math.max(low + 0.01, Math.min(high - 0.01, mid));
+    stopLow.value = Math.round(low * 100);
+    stopMid.value = Math.round(mid * 100);
+    stopHigh.value = Math.round(high * 100);
+    state.colorStops.low = low;
+    state.colorStops.mid = mid;
+    state.colorStops.high = high;
+  }
+
+  function applyColorUpdates() {
+    normalizeStops();
+    state.colorStops.colorLow = colorLow.value;
+    state.colorStops.colorMid = colorMid.value;
+    state.colorStops.colorHigh = colorHigh.value;
+    updateLayerStyle();
+  }
+
+  [colorLow, colorMid, colorHigh, stopLow, stopMid, stopHigh].forEach(el => {
+    el.oninput = applyColorUpdates;
+  });
 
   const metroSelect = document.getElementById("metroSelect");
   const metros = manifest.metros || {};
@@ -153,17 +196,9 @@ function loadLayer() {
     .then(r => r.json())
     .then(data => {
       const range = layerRange(data);
+      state.range = range;
       currentLayer = L.geoJSON(data, {
-        style: f => {
-          const x = Number(f.properties.coverage_pct);
-          return {
-            fillColor: color(x, range),
-            fillOpacity: state.fillOpacity,
-            color: "#333",
-            weight: 0.4,
-            opacity: state.strokeOpacity
-          };
-        },
+        style: styleForFeature,
         onEachFeature: (f, l) => {
           l.bindPopup(
             `<b>ID:</b> ${f.properties.GEOID}<br>
@@ -176,6 +211,22 @@ function loadLayer() {
     });
 }
 
+function updateLayerStyle() {
+  if (!currentLayer) return;
+  currentLayer.setStyle(styleForFeature);
+}
+
+function styleForFeature(f) {
+  const x = Number(f?.properties?.coverage_pct);
+  return {
+    fillColor: color(x, state.range),
+    fillOpacity: state.fillOpacity,
+    color: "#333",
+    weight: 0.4,
+    opacity: state.strokeOpacity
+  };
+}
+
 function color(x, range) {
   if (isNaN(x)) return "#000";
   const min = range?.min ?? 0;
@@ -183,7 +234,15 @@ function color(x, range) {
   const denom = max - min;
   const t = denom > 0 ? (x - min) / denom : 0;
   const pct = Math.max(0, Math.min(1, t));
-  return lerpColor("#b10026", "#006837", pct);
+  return lerp3(
+    state.colorStops.colorLow,
+    state.colorStops.colorMid,
+    state.colorStops.colorHigh,
+    pct,
+    state.colorStops.low,
+    state.colorStops.mid,
+    state.colorStops.high
+  );
 }
 
 function lerpColor(a, b, t) {
@@ -195,6 +254,17 @@ function lerpColor(a, b, t) {
   const rg = Math.round(ag + (bg - ag) * t);
   const rb = Math.round(ab + (bb - ab) * t);
   return `rgb(${rr},${rg},${rb})`;
+}
+
+function lerp3(a, b, c, t, t0, t1, t2) {
+  if (t <= t0) return a;
+  if (t >= t2) return c;
+  if (t <= t1) {
+    const local = (t - t0) / Math.max(1e-6, (t1 - t0));
+    return lerpColor(a, b, local);
+  }
+  const local = (t - t1) / Math.max(1e-6, (t2 - t1));
+  return lerpColor(b, c, local);
 }
 
 document.getElementById("downloadBtn").onclick = () => {
