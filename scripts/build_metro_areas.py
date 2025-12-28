@@ -29,7 +29,9 @@ import geopandas as gpd
 import osmnx as ox
 import networkx as nx
 import requests
+import numpy as np
 from pyproj import CRS, Transformer
+from shapely.geometry import box
 from shapely.ops import unary_union
 from tqdm.auto import tqdm
 
@@ -166,8 +168,13 @@ def fetch_zcta_population(year: int, zctas: list[str], api_key: str, sleep: floa
 
 def compute_coverage(boundaries_gdf: gpd.GeoDataFrame, access_poly):
     g = boundaries_gdf.copy()
-    g["area_total"] = g.geometry.area
-    g["covered_area"] = 0.0 if access_poly is None else g.geometry.intersection(access_poly).area
+    if "_mask_geom" in g.columns:
+        mask_geom = gpd.GeoSeries(g["_mask_geom"], crs=g.crs)
+        g["area_total"] = mask_geom.area
+        g["covered_area"] = 0.0 if access_poly is None else mask_geom.intersection(access_poly).area
+    else:
+        g["area_total"] = g.geometry.area
+        g["covered_area"] = 0.0 if access_poly is None else g.geometry.intersection(access_poly).area
     g["coverage_pct"] = (g["covered_area"] / g["area_total"]).clip(0, 1).fillna(0)
     return g
 
@@ -194,6 +201,141 @@ def export_layer(gdf_proj: gpd.GeoDataFrame, out_geojson: Path, out_csv: Path, i
     out.to_file(out_geojson, driver="GeoJSON")
     out[["GEOID", "POPULATION", "coverage_pct", "pop_with_access"]].to_csv(out_csv, index=False)
 
+def kde_smooth(gdf_proj: gpd.GeoDataFrame, value_col: str, bandwidth_m: float) -> np.ndarray:
+    if bandwidth_m <= 0 or gdf_proj.empty:
+        return gdf_proj[value_col].to_numpy()
+    centroids = gdf_proj.geometry.centroid
+    coords = np.column_stack([centroids.x.to_numpy(), centroids.y.to_numpy()])
+    values = gdf_proj[value_col].to_numpy()
+    diff = coords[:, None, :] - coords[None, :, :]
+    d2 = diff[..., 0] ** 2 + diff[..., 1] ** 2
+    bw2 = bandwidth_m ** 2
+    weights = np.exp(-0.5 * d2 / bw2)
+    wsum = weights.sum(axis=1)
+    return (weights @ values) / wsum
+
+def subdivide_gdf(
+    gdf_proj: gpd.GeoDataFrame,
+    id_col: str,
+    cell_size_m: float,
+    keep_square_geometry: bool = False,
+) -> gpd.GeoDataFrame:
+    if cell_size_m <= 0 or gdf_proj.empty:
+        return gdf_proj
+    rows = []
+    for _, row in gdf_proj.iterrows():
+        geom = row.geometry
+        if geom.is_empty:
+            continue
+        minx, miny, maxx, maxy = geom.bounds
+        if maxx - minx <= cell_size_m and maxy - miny <= cell_size_m:
+            rows.append(row.to_dict())
+            continue
+        xs = np.arange(minx, maxx, cell_size_m)
+        ys = np.arange(miny, maxy, cell_size_m)
+        base_area = geom.area if geom.area > 0 else 0
+        for x in xs:
+            for y in ys:
+                cell = box(x, y, x + cell_size_m, y + cell_size_m)
+                if not cell.intersects(geom):
+                    continue
+                piece = cell.intersection(geom)
+                if piece.is_empty:
+                    continue
+                piece_area = piece.area
+                pop = row["POPULATION"]
+                if base_area > 0:
+                    pop = int(round(pop * (piece_area / base_area)))
+                base = row.to_dict()
+                base["POPULATION"] = pop
+                if keep_square_geometry:
+                    base["_mask_geom"] = piece
+                    base["geometry"] = cell
+                else:
+                    base["geometry"] = piece
+                rows.append(base)
+    return gpd.GeoDataFrame(rows, crs=gdf_proj.crs)
+
+def build_metro_grid(metro_geom, cell_size_m: float, crs) -> gpd.GeoDataFrame:
+    if cell_size_m <= 0:
+        return gpd.GeoDataFrame(geometry=[], crs=crs)
+    minx, miny, maxx, maxy = metro_geom.bounds
+    rows = []
+    gid = 0
+    xs = np.arange(minx, maxx, cell_size_m)
+    ys = np.arange(miny, maxy, cell_size_m)
+    for x in xs:
+        for y in ys:
+            cell = box(x, y, x + cell_size_m, y + cell_size_m)
+            if not cell.intersects(metro_geom):
+                continue
+            inter = cell.intersection(metro_geom)
+            if inter.is_empty:
+                continue
+            gid += 1
+            rows.append({"GRID_ID": f"g{gid}", "_mask_geom": inter, "geometry": cell})
+    return gpd.GeoDataFrame(rows, crs=crs)
+
+def allocate_population_to_grid(grid_gdf: gpd.GeoDataFrame, tracts_gdf: gpd.GeoDataFrame, tract_id: str) -> gpd.GeoDataFrame:
+    if grid_gdf.empty:
+        return grid_gdf
+    if "POPULATION" not in tracts_gdf.columns:
+        grid_gdf["POPULATION"] = 0
+        return grid_gdf
+
+    grid_mask = grid_gdf.copy()
+    if "_mask_geom" in grid_mask.columns:
+        grid_mask["geometry"] = grid_mask["_mask_geom"]
+
+    tract_area = tracts_gdf[[tract_id, "geometry"]].copy()
+    tract_area["tract_area"] = tract_area.geometry.area
+    inter = gpd.overlay(
+        grid_mask[["GRID_ID", "geometry"]],
+        tracts_gdf[[tract_id, "POPULATION", "geometry"]],
+        how="intersection",
+    )
+    if inter.empty:
+        grid_gdf["POPULATION"] = 0
+        return grid_gdf
+
+    inter["area"] = inter.geometry.area
+    inter = inter.merge(tract_area[[tract_id, "tract_area"]], on=tract_id, how="left")
+    inter["pop_alloc"] = inter["POPULATION"] * (inter["area"] / inter["tract_area"]).fillna(0)
+    agg = inter.groupby("GRID_ID", as_index=False)["pop_alloc"].sum()
+    agg = agg.rename(columns={"pop_alloc": "POPULATION"})
+
+    out = grid_gdf.merge(agg, on="GRID_ID", how="left")
+    out["POPULATION"] = out["POPULATION"].fillna(0).round().astype(int)
+    return out
+
+def aggregate_subdivisions(gdf_sub: gpd.GeoDataFrame, gdf_orig: gpd.GeoDataFrame, id_col: str) -> gpd.GeoDataFrame:
+    if id_col not in gdf_sub.columns:
+        if gdf_sub.index.name == id_col:
+            gdf_sub = gdf_sub.copy()
+            gdf_sub[id_col] = gdf_sub.index
+        else:
+            raise KeyError(f"{id_col} missing from subgrid columns: {list(gdf_sub.columns)}")
+    agg = gdf_sub.groupby(id_col, as_index=False)[["POPULATION", "pop_with_access"]].sum()
+    agg["coverage_pct"] = (agg["pop_with_access"] / agg["POPULATION"]).fillna(0).clip(0, 1)
+    out = gdf_orig.merge(agg, on=id_col, how="left", suffixes=("_orig", "_agg"))
+    if "POPULATION" not in out.columns:
+        if "POPULATION_orig" in out.columns:
+            out["POPULATION"] = out["POPULATION_orig"]
+        elif "POPULATION_agg" in out.columns:
+            out["POPULATION"] = out["POPULATION_agg"]
+    if "pop_with_access_agg" in out.columns:
+        out["pop_with_access"] = out["pop_with_access_agg"]
+    if "coverage_pct_agg" in out.columns:
+        out["coverage_pct"] = out["coverage_pct_agg"]
+
+    out["POPULATION"] = out.get("POPULATION", 0).fillna(0).astype(int)
+    out["pop_with_access"] = out.get("pop_with_access", 0).fillna(0).astype(int)
+    out["coverage_pct"] = out.get("coverage_pct", 0).fillna(0)
+
+    drop_cols = [c for c in out.columns if c.endswith("_orig") or c.endswith("_agg")]
+    out = out.drop(columns=drop_cols)
+    return out
+
 # ---------------- Metro boundary ----------------
 
 def metro_boundary_from_places(place_names: list[str]) -> gpd.GeoDataFrame:
@@ -219,11 +361,22 @@ def build_one_metro(
     api_key: str,
     minutes_list: list[int],
     max_seeds: int,
+    osm_buffer_km: float,
+    kde_smooth_enabled: bool,
+    tract_subdivide_m: float,
+    metro_grid_m: float,
 ) -> None:
     out_dir = Path(out_root) / slug
     out_dir.mkdir(parents=True, exist_ok=True)
 
     info(f"=== Metro: {slug} ===")
+    info(
+        "Settings: "
+        f"max_seeds={max_seeds}, "
+        f"osm_buffer_km={osm_buffer_km}, "
+        f"kde={kde_smooth_enabled}, "
+        f"tract_subdivide_m={tract_subdivide_m}"
+    )
 
     # 1) Metro boundary
     metro_gdf = metro_boundary_from_places(meta["places"])
@@ -232,10 +385,10 @@ def build_one_metro(
     info("Metro boundary saved.")
 
     # 2) Walking network
-    osm_buffer_km = float(meta.get("osm_buffer_km", 0) or 0)
-    osm_poly_4326 = buffer_polygon_km(metro_poly_4326, osm_buffer_km)
-    if osm_buffer_km > 0:
-        info(f"Using OSM buffer: +{osm_buffer_km:.1f} km for network + POI pulls.")
+    buffer_km = float(osm_buffer_km or 0)
+    osm_poly_4326 = buffer_polygon_km(metro_poly_4326, buffer_km)
+    if buffer_km > 0:
+        info(f"Using OSM buffer: +{buffer_km:.1f} km for network + POI pulls.")
 
     info("Downloading walking network from OSM...")
     G = ox.graph_from_polygon(osm_poly_4326, network_type="walk", simplify=True)
@@ -363,7 +516,10 @@ def build_one_metro(
         if tract_pops else pd.DataFrame(columns=["GEOID", "POPULATION"])
     )
 
-    tracts = tracts.merge(tract_pop, left_on=tract_id, right_on="GEOID", how="left").drop(columns=["GEOID"])
+    if tract_id == "GEOID":
+        tracts = tracts.merge(tract_pop, on="GEOID", how="left")
+    else:
+        tracts = tracts.merge(tract_pop, left_on=tract_id, right_on="GEOID", how="left").drop(columns=["GEOID"])
     missing_tract = int(tracts["POPULATION"].isna().sum())
     if missing_tract:
         warn(f"{slug}: missing tract POPULATION for {missing_tract} features (set to 0)")
@@ -375,14 +531,34 @@ def build_one_metro(
     zcta_list = zips[zcta_id].unique().tolist()
     zcta_pop = fetch_zcta_population(year, zcta_list, api_key)
 
-    zips = zips.merge(zcta_pop, left_on=zcta_id, right_on="ZCTA5CE10", how="left")
-    if zcta_id != "ZCTA5CE10":
+    if zcta_id == "ZCTA5CE10":
+        zips = zips.merge(zcta_pop, on="ZCTA5CE10", how="left")
+    else:
+        zips = zips.merge(zcta_pop, left_on=zcta_id, right_on="ZCTA5CE10", how="left")
         zips = zips.drop(columns=["ZCTA5CE10"])
 
     missing_zip = int(zips["POPULATION"].isna().sum())
     if missing_zip:
         warn(f"{slug}: missing ZIP POPULATION for {missing_zip} features (set to 0)")
     zips["POPULATION"] = zips["POPULATION"].fillna(0).astype(int)
+
+    tracts_for_scoring = tracts
+    if tract_subdivide_m > 0:
+        info(f"Subdividing tracts: cell size {tract_subdivide_m:.0f}m")
+        tracts_for_scoring = subdivide_gdf(
+            tracts,
+            tract_id,
+            tract_subdivide_m,
+            keep_square_geometry=False,
+        )
+        info(f"Subgrid cells: {len(tracts_for_scoring):,}")
+
+    metro_grid = gpd.GeoDataFrame()
+    if metro_grid_m > 0:
+        info(f"Building metro grid: cell size {metro_grid_m:.0f}m")
+        metro_grid = build_metro_grid(metro_geom, metro_grid_m, crs_proj)
+        metro_grid = allocate_population_to_grid(metro_grid, tracts, tract_id)
+        info(f"Metro grid cells: {len(metro_grid):,}")
 
     # 7) Transit proxy access (5-min to transit)
     info("Computing transit proxy access (5-min walk to transit)...")
@@ -395,7 +571,14 @@ def build_one_metro(
     )
 
     # 8) Compute and export layers + breaks
-    breaks = {"zip": {"walk": {}, "walk_transit": {}}, "tract": {"walk": {}, "walk_transit": {}}}
+    geo_layers = [("zip", zips, zcta_id, False)]
+    if tracts_for_scoring is not tracts:
+        geo_layers.append(("tract_subgrid", tracts_for_scoring, tract_id, False))
+    if not metro_grid.empty:
+        geo_layers.append(("metro_grid", metro_grid, "GRID_ID", False))
+    geo_layers.append(("tract", tracts_for_scoring, tract_id, tracts_for_scoring is not tracts))
+
+    breaks = {g: {"walk": {}, "walk_transit": {}} for g, _, _, _ in geo_layers}
 
     for mins in minutes_list:
         info(f"Computing walk access isochrone union (minutes={mins})...")
@@ -414,30 +597,44 @@ def build_one_metro(
             else None
         )
 
-        for geo_name, gdf, id_col in [("zip", zips, zcta_id), ("tract", tracts, tract_id)]:
+        for geo_name, gdf, id_col, aggregate in geo_layers:
             info(f"Scoring coverage: geo={geo_name} mode=walk mins={mins} ...")
             g_walk = compute_coverage(gdf, walk_access)
+            if kde_smooth_enabled:
+                bandwidth_m = mins * WALK_METERS_PER_MIN
+                g_walk["coverage_pct"] = kde_smooth(g_walk, "coverage_pct", bandwidth_m)
             g_walk["pop_with_access"] = (g_walk["POPULATION"] * g_walk["coverage_pct"]).round().astype(int)
 
+            out_walk = g_walk
+            if aggregate:
+                out_walk = aggregate_subdivisions(g_walk, tracts, tract_id)
+
             export_layer(
-                g_walk,
+                out_walk,
                 out_dir / f"{geo_name}_walk_{mins}.geojson",
                 out_dir / (f"{geo_name}_summary.csv" if mins == minutes_list[0] else f"{geo_name}_summary_{mins}.csv"),
                 id_col=id_col
             )
-            breaks[geo_name]["walk"][str(mins)] = quantile_breaks(g_walk)
+            breaks[geo_name]["walk"][str(mins)] = quantile_breaks(out_walk)
 
             info(f"Scoring coverage: geo={geo_name} mode=walk_transit mins={mins} ...")
             g_wt = compute_coverage(gdf, walk_transit_access)
+            if kde_smooth_enabled:
+                bandwidth_m = mins * WALK_METERS_PER_MIN
+                g_wt["coverage_pct"] = kde_smooth(g_wt, "coverage_pct", bandwidth_m)
             g_wt["pop_with_access"] = (g_wt["POPULATION"] * g_wt["coverage_pct"]).round().astype(int)
 
+            out_wt = g_wt
+            if aggregate:
+                out_wt = aggregate_subdivisions(g_wt, tracts, tract_id)
+
             export_layer(
-                g_wt,
+                out_wt,
                 out_dir / f"{geo_name}_walk_transit_{mins}.geojson",
                 out_dir / (f"{geo_name}_walk_transit_summary.csv" if mins == minutes_list[0] else f"{geo_name}_walk_transit_summary_{mins}.csv"),
                 id_col=id_col
             )
-            breaks[geo_name]["walk_transit"][str(mins)] = quantile_breaks(g_wt)
+            breaks[geo_name]["walk_transit"][str(mins)] = quantile_breaks(out_wt)
 
     (out_dir / "breaks.json").write_text(json.dumps(breaks, indent=2))
     info(f"Finished metro: {slug}")
@@ -452,13 +649,39 @@ def main():
     ap.add_argument("--census-key", required=True, help="Census API key")
     ap.add_argument("--minutes", default="10,15,20", help="Comma-separated minutes thresholds")
     ap.add_argument("--max-seeds", type=int, default=800, help="Max seed nodes for isochrone unions (0 = no cap)")
+    ap.add_argument("--osm-buffer-km", type=float, default=None, help="Expand OSM network + POI queries by km beyond metro boundary")
+    ap.add_argument("--kde", action="store_true", help="KDE smooth coverage using minutes as bandwidth (meters)")
+    ap.add_argument("--tract-subdivide-m", type=float, default=0, help="Subdivide tracts into grid cells (meters)")
+    ap.add_argument("--metro-grid-m", type=float, default=0, help="Build a metro-wide grid (meters)")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
     minutes_list = [int(x.strip()) for x in args.minutes.split(",") if x.strip()]
 
     for slug, meta in cfg["metros"].items():
-        build_one_metro(slug, meta, args.out, args.year, args.census_key, minutes_list, args.max_seeds)
+        osm_buffer_km = (
+            float(args.osm_buffer_km)
+            if args.osm_buffer_km is not None
+            else float(meta.get("osm_buffer_km", 0) or 0)
+        )
+        kde_enabled = bool(meta.get("kde", args.kde))
+        tract_subdivide_m = float(meta.get("tract_subdivide_m", args.tract_subdivide_m) or 0)
+        max_seeds = int(meta.get("max_seeds", args.max_seeds))
+        metro_grid_m = float(meta.get("metro_grid_m", args.metro_grid_m) or 0)
+
+        build_one_metro(
+            slug,
+            meta,
+            args.out,
+            args.year,
+            args.census_key,
+            minutes_list,
+            max_seeds,
+            osm_buffer_km,
+            kde_enabled,
+            tract_subdivide_m,
+            metro_grid_m,
+        )
 
 if __name__ == "__main__":
     main()

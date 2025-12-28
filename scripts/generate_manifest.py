@@ -5,7 +5,7 @@ import geopandas as gpd
 
 DATA_ROOT = Path("docs/data")
 OUT = DATA_ROOT / "manifest.json"
-PATTERN = re.compile(r"^(zip|tract)_(walk|walk_transit)_(\d+)\.geojson$")
+PATTERN = re.compile(r"^(zip|tract|tract_subgrid|metro_grid)_(walk|walk_transit)_(\d+)\.geojson$")
 
 def center_zoom(bounds):
     minx, miny, maxx, maxy = bounds

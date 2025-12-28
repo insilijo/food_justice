@@ -1,22 +1,26 @@
 {
-    "metros": {
-        "boston_ma_nh": {
-            "name": "Boston\u2013Cambridge\u2013Newton, MA-NH MSA",
-            "places": [
-                "Boston, MA, USA",
-                "Brookline, MA, USA",
-                "Cambridge, MA, USA",
-                "Newton, MA, USA",
-                "Somerville, MA, USA"
-            ],
-            "osm_buffer_km": 10,
-            "zoom": 11,
-            "boundaries": {
-                "zcta_path": "data_inputs/zcta_us.gpkg",
-                "zcta_id": "ZCTA5CE10",
-                "tract_path": "data_inputs/tracts_us.gpkg",
-                "tract_id": "GEOID"
-            }
-        }
+  "metros": {
+    "boston_ma_nh": {
+      "name": "Boston\u2013Cambridge\u2013Newton, MA-NH MSA",
+      "places": [
+        "Boston, MA, USA",
+        "Brookline, MA, USA",
+        "Cambridge, MA, USA",
+        "Newton, MA, USA",
+        "Somerville, MA, USA"
+      ],
+      "zoom": 11,
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     }
+  }
 }

@@ -1,13 +1,32 @@
 // Food Access Explorer (static Leaflet app) with data-driven color breaks
 
 let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl;
-let state = { metro: null, geo: null, mode: null, minutes: null };
+let state = {
+  metro: null,
+  geo: null,
+  mode: null,
+  minutes: null,
+  fillOpacity: 0.7,
+  strokeOpacity: 0.6
+};
 
 fetch("data/manifest.json")
   .then(r => r.json())
   .then(m => { manifest = m; initUI(); });
 
 function initUI() {
+  const fillOpacity = document.getElementById("fillOpacity");
+  const strokeOpacity = document.getElementById("strokeOpacity");
+
+  fillOpacity.oninput = e => {
+    state.fillOpacity = Number(e.target.value);
+    if (currentLayer) currentLayer.setStyle({ fillOpacity: state.fillOpacity });
+  };
+  strokeOpacity.oninput = e => {
+    state.strokeOpacity = Number(e.target.value);
+    if (currentLayer) currentLayer.setStyle({ opacity: state.strokeOpacity });
+  };
+
   const metroSelect = document.getElementById("metroSelect");
   const metros = manifest.metros || {};
   Object.entries(metros).forEach(([slug, meta]) => {
@@ -32,11 +51,11 @@ function loadMetro(slug) {
   const meta = manifest.metros[slug];
 
   if (!map) {
-    map = L.map("map").setView(meta.center, meta.zoom);
+    map = L.map("map").setView(meta.center, meta.zoom + 1);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
     layerControl = L.control.layers(null, {}).addTo(map);
   } else {
-    map.setView(meta.center, meta.zoom);
+    map.setView(meta.center, meta.zoom + 1);
   }
 
   populate("geoSelect", meta.geographies, v => { state.geo = v; loadLayer(); });
@@ -56,8 +75,12 @@ function populate(id, values, cb) {
     el.appendChild(o);
   });
   el.onchange = e => cb(e.target.value);
-  el.value = values[0];
-  cb(values[0]);
+  let initial = values[0];
+  if (id === "geoSelect" && values.includes("metro_grid")) {
+    initial = "metro_grid";
+  }
+  el.value = initial;
+  cb(initial);
 }
 
 function loadBoundary(meta) {
@@ -71,7 +94,9 @@ function loadBoundary(meta) {
   fetch(`data/${state.metro}/metro_boundary.geojson`)
     .then(r => r.json())
     .then(d => {
-      boundaryLayer = L.geoJSON(d, { style: { color: "#000", weight: 2, fillOpacity: 0 } }).addTo(map);
+      boundaryLayer = L.geoJSON(d, {
+        style: { color: "#000", weight: 2, opacity: 1, fillOpacity: 0 }
+      }).addTo(map);
       layerControl.addOverlay(boundaryLayer, "Metro boundary");
     });
 }
@@ -133,9 +158,10 @@ function loadLayer() {
           const x = Number(f.properties.coverage_pct);
           return {
             fillColor: color(x, range),
-            fillOpacity: 0.7,
+            fillOpacity: state.fillOpacity,
             color: "#333",
-            weight: 0.4
+            weight: 0.4,
+            opacity: state.strokeOpacity
           };
         },
         onEachFeature: (f, l) => {

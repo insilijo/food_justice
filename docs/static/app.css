@@ -13,3 +13,12 @@ html, body { margin: 0; height: 100%; }
   width: 220px;
 }
 select, button { width: 100%; margin: 4px 0; }
+label.control-group {
+  display: block;
+  margin: 6px 0;
+  font-size: 12px;
+}
+label.control-group input {
+  width: 100%;
+  margin-top: 4px;
+}

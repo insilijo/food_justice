@@ -181,7 +181,7 @@ def convert_shp_to_gpkg(shp: Path, gpkg: Path, layer: str, append: bool = False)
     import geopandas as gpd
     gdf = gpd.read_file(shp)
     mode = "a" if append else "w"
-    gdf.to_file(gpkg, layer=layer, driver="GPKG")
+    gdf.to_file(gpkg, layer=layer, driver="GPKG", mode=mode)
 
 def validate_columns(gpkg_path: Path, required: list[str], layer: str | None = None) -> None:
     import geopandas as gpd
