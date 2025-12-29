@@ -1,14 +1,19 @@
 // Food Access Explorer (static Leaflet app) with data-driven color breaks
 
-let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl;
+let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl, groceryLayer, stationLayer, busLayer;
 let state = {
   metro: null,
   geo: null,
   mode: null,
   minutes: null,
+  timeMode: "fixed",
   fillOpacity: 0.7,
   strokeOpacity: 0.6,
   range: { min: 0, max: 1 },
+  metric: "coverage_pct",
+  showGroceries: false,
+  showStations: false,
+  showBusStops: false,
   colorStops: {
     low: 0,
     mid: 0.5,
@@ -32,6 +37,11 @@ function initUI() {
   const stopLow = document.getElementById("stopLow");
   const stopMid = document.getElementById("stopMid");
   const stopHigh = document.getElementById("stopHigh");
+  const metricSelect = document.getElementById("metricSelect");
+  const timeModeSelect = document.getElementById("timeModeSelect");
+  const groceryToggle = document.getElementById("groceryToggle");
+  const stationToggle = document.getElementById("stationToggle");
+  const busToggle = document.getElementById("busToggle");
 
   fillOpacity.oninput = e => {
     state.fillOpacity = Number(e.target.value);
@@ -70,6 +80,23 @@ function initUI() {
     el.oninput = applyColorUpdates;
   });
 
+  metricSelect.onchange = e => {
+    state.metric = e.target.value;
+    updateLayerStyle();
+  };
+  groceryToggle.onchange = e => {
+    state.showGroceries = e.target.checked;
+    togglePOILayers();
+  };
+  stationToggle.onchange = e => {
+    state.showStations = e.target.checked;
+    togglePOILayers();
+  };
+  busToggle.onchange = e => {
+    state.showBusStops = e.target.checked;
+    togglePOILayers();
+  };
+
   const metroSelect = document.getElementById("metroSelect");
   const metros = manifest.metros || {};
   Object.entries(metros).forEach(([slug, meta]) => {
@@ -87,6 +114,23 @@ function initUI() {
   }
   metroSelect.value = first;
   loadMetro(first);
+
+  timeModeSelect.innerHTML = "";
+  [
+    { value: "fixed", label: "Fixed minutes" },
+    { value: "min_access", label: "Minimum time to access" }
+  ].forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt.value;
+    o.textContent = opt.label;
+    timeModeSelect.appendChild(o);
+  });
+  timeModeSelect.onchange = e => {
+    state.timeMode = e.target.value;
+    updateMetricOptions();
+    toggleTimeSelect();
+    loadLayer();
+  };
 }
 
 function loadMetro(slug) {
@@ -104,9 +148,12 @@ function loadMetro(slug) {
   populate("geoSelect", meta.geographies, v => { state.geo = v; loadLayer(); });
   populate("modeSelect", meta.modes, v => { state.mode = v; loadLayer(); });
   populate("timeSelect", meta.minutes, v => { state.minutes = v; loadLayer(); });
+  toggleTimeSelect();
+  updateMetricOptions();
 
   loadBoundary(meta);
   loadUSDA(meta);
+  togglePOILayers();
 }
 
 function populate(id, values, cb) {
@@ -124,6 +171,53 @@ function populate(id, values, cb) {
   }
   el.value = initial;
   cb(initial);
+}
+
+function toggleTimeSelect() {
+  const timeSelect = document.getElementById("timeSelect");
+  const show = state.timeMode === "fixed";
+  timeSelect.style.display = show ? "block" : "none";
+}
+
+function updateMetricOptions() {
+  const metricSelect = document.getElementById("metricSelect");
+  if (state.timeMode === "min_access") {
+    metricSelect.innerHTML = "";
+    const o = document.createElement("option");
+    o.value = "min_minutes";
+    o.textContent = "Minimum minutes";
+    metricSelect.appendChild(o);
+    state.metric = "min_minutes";
+    metricSelect.value = state.metric;
+    return;
+  }
+  const base = [
+    { value: "coverage_pct", label: "Coverage %" },
+    { value: "pop_with_access", label: "Population w/ access" },
+    { value: "pop_adjusted_coverage", label: "Pop-adjusted coverage" }
+  ];
+  const metroGridExtras = [
+    { value: "transit_commuter_share", label: "Transit commuter share" },
+    { value: "zero_vehicle_share", label: "Zero-vehicle share" },
+    { value: "MEDIAN_RENT_PER_ROOM", label: "Median housing cost per room" },
+    { value: "coverage_transit_adjusted", label: "Coverage × transit share" },
+    { value: "coverage_zero_vehicle_adjusted", label: "Coverage × zero-vehicle share" },
+    { value: "coverage_rent_adjusted", label: "Coverage × rent per room (norm)" }
+  ];
+  const options = state.geo === "metro_grid" ? base.concat(metroGridExtras) : base;
+
+  metricSelect.innerHTML = "";
+  options.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt.value;
+    o.textContent = opt.label;
+    metricSelect.appendChild(o);
+  });
+
+  if (!options.find(o => o.value === state.metric)) {
+    state.metric = "coverage_pct";
+  }
+  metricSelect.value = state.metric;
 }
 
 function loadBoundary(meta) {
@@ -160,6 +254,74 @@ function loadUSDA(meta) {
     });
 }
 
+function togglePOILayers() {
+  if (!map) return;
+  if (!state.showGroceries && groceryLayer) {
+    map.removeLayer(groceryLayer);
+    layerControl.removeLayer(groceryLayer);
+    groceryLayer = null;
+  }
+  if (!state.showStations && stationLayer) {
+    map.removeLayer(stationLayer);
+    layerControl.removeLayer(stationLayer);
+    stationLayer = null;
+  }
+  if (!state.showBusStops && busLayer) {
+    map.removeLayer(busLayer);
+    layerControl.removeLayer(busLayer);
+    busLayer = null;
+  }
+
+  if (state.showGroceries && !groceryLayer) {
+    fetch(`data/${state.metro}/groceries.geojson`)
+      .then(r => r.json())
+      .then(d => {
+        const groceryIcon = L.divIcon({
+          className: "grocery-icon",
+          html: "🏪",
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        groceryLayer = L.geoJSON(d, {
+          pointToLayer: (f, latlng) => L.marker(latlng, { icon: groceryIcon })
+        }).addTo(map);
+        layerControl.addOverlay(groceryLayer, "Groceries");
+      });
+  }
+  if ((state.showStations || state.showBusStops) && (!stationLayer || !busLayer)) {
+    fetch(`data/${state.metro}/transit.geojson`)
+      .then(r => r.json())
+      .then(d => {
+        const trainIcon = L.divIcon({
+          className: "train-icon",
+          html: "🚆",
+          iconSize: [18, 18],
+          iconAnchor: [9, 9]
+        });
+        if (state.showStations && !stationLayer) {
+          stationLayer = L.geoJSON(d, {
+            filter: f => f?.properties?.railway === "station" || f?.properties?.public_transport === "station",
+            pointToLayer: (f, latlng) => L.marker(latlng, { icon: trainIcon })
+          }).addTo(map);
+          layerControl.addOverlay(stationLayer, "Stations");
+        }
+        if (state.showBusStops && !busLayer) {
+          busLayer = L.geoJSON(d, {
+            filter: f => f?.properties?.highway === "bus_stop",
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, {
+              radius: 2.5,
+              color: "#000",
+              fillColor: "#000",
+              fillOpacity: 0.9,
+              weight: 1
+            })
+          }).addTo(map);
+          layerControl.addOverlay(busLayer, "Bus stops");
+        }
+      });
+  }
+}
+
 function getBreaks(meta) {
   try {
     const t = meta.breaks[state.geo][state.mode][String(state.minutes)];
@@ -170,10 +332,10 @@ function getBreaks(meta) {
   }
 }
 
-function layerRange(data) {
+function layerRange(data, metric) {
   const vals = [];
   data.features.forEach(f => {
-    const v = Number(f.properties.coverage_pct);
+    const v = Number(f.properties[metric]);
     if (!isNaN(v)) vals.push(v);
   });
   if (!vals.length) return { min: 0, max: 1 };
@@ -181,7 +343,9 @@ function layerRange(data) {
 }
 
 function loadLayer() {
-  if (!state.metro || !state.geo || !state.mode || !state.minutes) return;
+  if (!state.metro || !state.geo || !state.mode) return;
+  if (state.timeMode === "fixed" && !state.minutes) return;
+  updateMetricOptions();
 
   if (currentLayer) {
     map.removeLayer(currentLayer);
@@ -191,11 +355,11 @@ function loadLayer() {
 
   const meta = manifest.metros[state.metro];
   const path = `data/${state.metro}/${state.geo}_${state.mode}_${state.minutes}.geojson`;
-
   fetch(path)
     .then(r => r.json())
     .then(data => {
-      const range = layerRange(data);
+      computeDerivedMetrics(data);
+      const range = layerRange(data, metricKey());
       state.range = range;
       currentLayer = L.geoJSON(data, {
         style: styleForFeature,
@@ -203,7 +367,8 @@ function loadLayer() {
           l.bindPopup(
             `<b>ID:</b> ${f.properties.GEOID}<br>
              <b>Population:</b> ${Math.round(f.properties.POPULATION)}<br>
-             <b>Access:</b> ${(Number(f.properties.coverage_pct)*100).toFixed(1)}%`
+             <b>Access:</b> ${(Number(f.properties.coverage_pct)*100).toFixed(1)}%<br>
+             <b>Metric:</b> ${formatMetric(f.properties, metricKey())}`
           );
         }
       }).addTo(map);
@@ -213,11 +378,12 @@ function loadLayer() {
 
 function updateLayerStyle() {
   if (!currentLayer) return;
+  state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
   currentLayer.setStyle(styleForFeature);
 }
 
 function styleForFeature(f) {
-  const x = Number(f?.properties?.coverage_pct);
+  const x = Number(f?.properties?.[metricKey()]);
   return {
     fillColor: color(x, state.range),
     fillOpacity: state.fillOpacity,
@@ -233,7 +399,10 @@ function color(x, range) {
   const max = range?.max ?? 1;
   const denom = max - min;
   const t = denom > 0 ? (x - min) / denom : 0;
-  const pct = Math.max(0, Math.min(1, t));
+  let pct = Math.max(0, Math.min(1, t));
+  if (metricKey().startsWith("min_")) {
+    pct = 1 - pct;
+  }
   return lerp3(
     state.colorStops.colorLow,
     state.colorStops.colorMid,
@@ -245,6 +414,13 @@ function color(x, range) {
   );
 }
 
+function metricKey() {
+  if (state.timeMode === "min_access") {
+    return state.mode === "walk" ? "min_grocery_minutes" : "min_gtfs_minutes";
+  }
+  return state.metric;
+}
+
 function lerpColor(a, b, t) {
   const pa = parseInt(a.slice(1), 16);
   const pb = parseInt(b.slice(1), 16);
@@ -254,6 +430,49 @@ function lerpColor(a, b, t) {
   const rg = Math.round(ag + (bg - ag) * t);
   const rb = Math.round(ab + (bb - ab) * t);
   return `rgb(${rr},${rg},${rb})`;
+}
+
+function computeDerivedMetrics(data) {
+  let maxPopAccess = 0;
+  let maxRent = 0;
+  data.features.forEach(f => {
+    const v = Number(f.properties.pop_with_access);
+    if (!isNaN(v)) maxPopAccess = Math.max(maxPopAccess, v);
+    const r = Number(f.properties.MEDIAN_RENT_PER_ROOM);
+    if (!isNaN(r)) maxRent = Math.max(maxRent, r);
+  });
+  data.features.forEach(f => {
+    const v = Number(f.properties.pop_with_access);
+    f.properties.pop_adjusted_coverage = maxPopAccess > 0 ? (v / maxPopAccess) : 0;
+    const cov = Number(f.properties.coverage_pct);
+    const transit = Number(f.properties.transit_commuter_share);
+    const zeroVeh = Number(f.properties.zero_vehicle_share);
+    const rent = Number(f.properties.MEDIAN_RENT_PER_ROOM);
+    const rentNorm = maxRent > 0 ? (rent / maxRent) : 0;
+    f.properties.coverage_transit_adjusted = isNaN(cov) || isNaN(transit) ? 0 : cov * (1 - transit);
+    f.properties.coverage_zero_vehicle_adjusted = isNaN(cov) || isNaN(zeroVeh) ? 0 : cov * (1 - zeroVeh);
+    f.properties.coverage_rent_adjusted = isNaN(cov) || isNaN(rentNorm) ? 0 : cov * rentNorm;
+  });
+}
+
+function formatMetric(props, metric) {
+  const v = Number(props?.[metric]);
+  if (isNaN(v)) return "n/a";
+  if (
+    metric.endsWith("_share") ||
+    metric === "coverage_pct" ||
+    metric === "pop_adjusted_coverage" ||
+    metric.startsWith("coverage_")
+  ) {
+    return `${(v * 100).toFixed(1)}%`;
+  }
+  if (metric === "min_minutes") {
+    return `${Math.round(v)} min`;
+  }
+  if (metric === "MEDIAN_RENT_PER_ROOM") {
+    return `$${Math.round(v)}`;
+  }
+  return Math.round(v).toLocaleString();
 }
 
 function lerp3(a, b, c, t, t0, t1, t2) {

@@ -27,3 +27,13 @@ label.control-group input[type="color"] {
   padding: 0;
   border: none;
 }
+.grocery-icon {
+  font-size: 16px;
+  line-height: 18px;
+  text-align: center;
+}
+.train-icon {
+  font-size: 16px;
+  line-height: 18px;
+  text-align: center;
+}
