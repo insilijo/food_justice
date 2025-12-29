@@ -132,6 +132,7 @@ function initUI() {
     state.timeMode = e.target.value;
     updateMetricOptions();
     toggleTimeSelect();
+    updateLayerStyle();
     loadLayer();
   };
 }
@@ -200,11 +201,11 @@ function updateMetricOptions() {
     { value: "pop_adjusted_coverage", label: "Pop-adjusted coverage" }
   ];
   const metroGridExtras = [
-    { value: "transit_commuter_share", label: "Transit commuter share" },
-    { value: "zero_vehicle_share", label: "Zero-vehicle share" },
+    { value: "non_transit_commuter_share", label: "Non-transit commuter share" },
+    { value: "vehicle_share", label: "Vehicle share" },
     { value: "MEDIAN_RENT_PER_ROOM", label: "Median housing cost per room" },
-    { value: "coverage_transit_adjusted", label: "Coverage × transit share" },
-    { value: "coverage_zero_vehicle_adjusted", label: "Coverage × zero-vehicle share" },
+    { value: "coverage_non_transit_adjusted", label: "Coverage × non-transit share" },
+    { value: "coverage_vehicle_adjusted", label: "Coverage × vehicle share" },
     { value: "coverage_rent_adjusted", label: "Coverage × rent per room (norm)" }
   ];
   const options = state.geo === "metro_grid" ? base.concat(metroGridExtras) : base;
@@ -341,8 +342,12 @@ function layerRange(data, metric) {
     const v = Number(f.properties[metric]);
     if (!isNaN(v)) vals.push(v);
   });
-  if (!vals.length) return { min: 0, max: 1 };
-  return { min: Math.min(...vals), max: Math.max(...vals) };
+  if (!vals.length) return { min: 0, max: 1, median: 0 };
+  vals.sort((a, b) => a - b);
+  const mid = Math.floor(vals.length / 2);
+  const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+  const min = metric.startsWith("min_") ? 0 : vals[0];
+  return { min, max: vals[vals.length - 1], median };
 }
 
 function loadLayer() {
@@ -364,6 +369,7 @@ function loadLayer() {
       computeDerivedMetrics(data);
       const range = layerRange(data, metricKey());
       state.range = range;
+      seedMidStopFromMedian();
       updateColorRangeLabels();
       currentLayer = L.geoJSON(data, {
         style: styleForFeature,
@@ -383,6 +389,7 @@ function loadLayer() {
 function updateLayerStyle() {
   if (!currentLayer) return;
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
+  seedMidStopFromMedian();
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
 }
@@ -401,13 +408,32 @@ function styleForFeature(f) {
 function updateColorRangeLabels() {
   const min = state.range?.min ?? 0;
   const max = state.range?.max ?? 1;
-  const mid = min + (max - min) * state.colorStops.mid;
+  const lowStop = state.colorStops.low ?? 0;
+  const midStop = state.colorStops.mid ?? 0.5;
+  const highStop = state.colorStops.high ?? 1;
+  const lowVal = min + (max - min) * lowStop;
+  const midVal = min + (max - min) * midStop;
+  const highVal = min + (max - min) * highStop;
   const lowEl = document.getElementById("colorLowValue");
   const midEl = document.getElementById("colorMidValue");
   const highEl = document.getElementById("colorHighValue");
-  if (lowEl) lowEl.textContent = `Min: ${formatMetricValue(min, metricKey())}`;
-  if (midEl) midEl.textContent = `Mid: ${formatMetricValue(mid, metricKey())}`;
-  if (highEl) highEl.textContent = `Max: ${formatMetricValue(max, metricKey())}`;
+  const lowText = `Low: ${formatMetricValue(lowVal, metricKey())}`;
+  const highText = `High: ${formatMetricValue(highVal, metricKey())}`;
+  if (lowEl) lowEl.textContent = lowText;
+  if (midEl) midEl.textContent = `Mid: ${formatMetricValue(midVal, metricKey())}`;
+  if (highEl) highEl.textContent = highText;
+}
+
+function seedMidStopFromMedian() {
+  const min = state.range?.min ?? 0;
+  const max = state.range?.max ?? 1;
+  const median = state.range?.median;
+  if (median === undefined || max <= min) return;
+  const t = (median - min) / (max - min);
+  const mid = Math.max(0, Math.min(1, t));
+  state.colorStops.mid = mid;
+  const stopMid = document.getElementById("stopMid");
+  if (stopMid) stopMid.value = String(Math.round(mid * 100));
 }
 
 function color(x, range) {
@@ -430,7 +456,8 @@ function color(x, range) {
 
 function metricKey() {
   if (state.timeMode === "min_access") {
-    return state.mode === "walk" ? "min_grocery_minutes" : "min_transit_minutes";
+    if (state.mode === "walk") return "min_grocery_minutes";
+    return state.geo === "metro_grid" ? "min_gtfs_minutes" : "min_transit_minutes";
   }
   return state.metric;
 }
@@ -463,8 +490,12 @@ function computeDerivedMetrics(data) {
     const zeroVeh = Number(f.properties.zero_vehicle_share);
     const rent = Number(f.properties.MEDIAN_RENT_PER_ROOM);
     const rentNorm = maxRent > 0 ? (rent / maxRent) : 0;
-    f.properties.coverage_transit_adjusted = isNaN(cov) || isNaN(transit) ? 0 : cov * (1 - transit);
-    f.properties.coverage_zero_vehicle_adjusted = isNaN(cov) || isNaN(zeroVeh) ? 0 : cov * (1 - zeroVeh);
+    const vehicleShare = isNaN(zeroVeh) ? 0 : (1 - zeroVeh);
+    const nonTransitShare = isNaN(transit) ? 0 : (1 - transit);
+    f.properties.vehicle_share = vehicleShare;
+    f.properties.non_transit_commuter_share = nonTransitShare;
+    f.properties.coverage_vehicle_adjusted = isNaN(cov) ? 0 : cov * vehicleShare;
+    f.properties.coverage_non_transit_adjusted = isNaN(cov) ? 0 : cov * nonTransitShare;
     f.properties.coverage_rent_adjusted = isNaN(cov) || isNaN(rentNorm) ? 0 : cov * rentNorm;
   });
 }
