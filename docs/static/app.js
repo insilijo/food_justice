@@ -10,7 +10,9 @@ let state = {
   fillOpacity: 0.7,
   strokeOpacity: 0.6,
   range: { min: 0, max: 1 },
+  opacityRange: { min: 0, max: 1 },
   metric: "coverage_pct",
+  opacityMetric: "none",
   showGroceries: false,
   showStations: false,
   showBusStops: false,
@@ -41,6 +43,7 @@ function initUI() {
   const colorMidValue = document.getElementById("colorMidValue");
   const colorHighValue = document.getElementById("colorHighValue");
   const metricSelect = document.getElementById("metricSelect");
+  const opacityMetricSelect = document.getElementById("opacityMetricSelect");
   const timeModeSelect = document.getElementById("timeModeSelect");
   const groceryToggle = document.getElementById("groceryToggle");
   const stationToggle = document.getElementById("stationToggle");
@@ -85,6 +88,10 @@ function initUI() {
 
   metricSelect.onchange = e => {
     state.metric = e.target.value;
+    updateLayerStyle();
+  };
+  opacityMetricSelect.onchange = e => {
+    state.opacityMetric = e.target.value;
     updateLayerStyle();
   };
   groceryToggle.onchange = e => {
@@ -193,6 +200,21 @@ function updateMetricOptions() {
     metricSelect.appendChild(o);
     state.metric = "min_minutes";
     metricSelect.value = state.metric;
+    if (opacityMetricSelect) {
+      opacityMetricSelect.innerHTML = "";
+      const on = document.createElement("option");
+      on.value = "none";
+      on.textContent = "None (uniform)";
+      opacityMetricSelect.appendChild(on);
+      const op = document.createElement("option");
+      op.value = "POPULATION";
+      op.textContent = "Population";
+      opacityMetricSelect.appendChild(op);
+      if (!["none", "POPULATION"].includes(state.opacityMetric)) {
+        state.opacityMetric = "none";
+      }
+      opacityMetricSelect.value = state.opacityMetric;
+    }
     return;
   }
   const base = [
@@ -222,6 +244,26 @@ function updateMetricOptions() {
     state.metric = "coverage_pct";
   }
   metricSelect.value = state.metric;
+
+  if (opacityMetricSelect) {
+    opacityMetricSelect.innerHTML = "";
+    const on = document.createElement("option");
+    on.value = "none";
+    on.textContent = "None (uniform)";
+    opacityMetricSelect.appendChild(on);
+    const op = document.createElement("option");
+    op.value = "POPULATION";
+    op.textContent = "Population";
+    opacityMetricSelect.appendChild(op);
+    const oa = document.createElement("option");
+    oa.value = "pop_with_access";
+    oa.textContent = "Population w/ access";
+    opacityMetricSelect.appendChild(oa);
+    if (!["none", "POPULATION", "pop_with_access"].includes(state.opacityMetric)) {
+      state.opacityMetric = "none";
+    }
+    opacityMetricSelect.value = state.opacityMetric;
+  }
 }
 
 function loadBoundary(meta) {
@@ -369,6 +411,7 @@ function loadLayer() {
       computeDerivedMetrics(data);
       const range = layerRange(data, metricKey());
       state.range = range;
+      state.opacityRange = layerRange(data, state.opacityMetric);
       seedMidStopFromMedian();
       updateColorRangeLabels();
       currentLayer = L.geoJSON(data, {
@@ -389,15 +432,17 @@ function loadLayer() {
 function updateLayerStyle() {
   if (!currentLayer) return;
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
+  state.opacityRange = layerRange(currentLayer.toGeoJSON(), state.opacityMetric);
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
 }
 
 function styleForFeature(f) {
   const x = Number(f?.properties?.[metricKey()]);
+  const opacity = featureOpacity(f);
   return {
     fillColor: color(x, state.range),
-    fillOpacity: state.fillOpacity,
+    fillOpacity: opacity,
     color: "#333",
     weight: 0.4,
     opacity: state.strokeOpacity
@@ -421,6 +466,20 @@ function updateColorRangeLabels() {
   if (lowEl) lowEl.textContent = lowText;
   if (midEl) midEl.textContent = `Mid: ${formatMetricValue(midVal, metricKey())}`;
   if (highEl) highEl.textContent = highText;
+}
+
+function featureOpacity(f) {
+  if (!state.opacityMetric || state.opacityMetric === "none") {
+    return state.fillOpacity;
+  }
+  const v = Number(f?.properties?.[state.opacityMetric]);
+  if (isNaN(v)) return state.fillOpacity * 0.1;
+  const min = state.opacityRange?.min ?? 0;
+  const max = state.opacityRange?.max ?? 1;
+  const denom = max - min;
+  const t = denom > 0 ? (v - min) / denom : 0;
+  const pct = Math.max(0, Math.min(1, t));
+  return state.fillOpacity * pct;
 }
 
 function seedMidStopFromMedian() {
