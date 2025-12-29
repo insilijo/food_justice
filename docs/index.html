@@ -8,19 +8,19 @@
 </head>
 <body>
   <div id="controls">
-    <div class="control-section">
-      <div class="section-title">Location</div>
+    <details class="control-section" open>
+      <summary class="section-title">Location</summary>
       <select id="metroSelect" title="Choose a metro area to view"></select>
-    </div>
-    <div class="control-section">
-      <div class="section-title">Layer</div>
+    </details>
+    <details class="control-section" open>
+      <summary class="section-title">Layer</summary>
       <select id="geoSelect" title="Choose the geography layer (zip, tract, grid)"></select>
       <select id="modeSelect" title="Choose walking or walk+transit access"></select>
       <select id="timeModeSelect" title="Fixed minutes vs minimum time"></select>
       <select id="timeSelect" title="Select the time threshold (minutes)"></select>
-    </div>
-    <div class="control-section">
-      <div class="section-title">Metrics</div>
+    </details>
+    <details class="control-section" open>
+      <summary class="section-title">Metrics</summary>
       <select id="metricSelect" title="Choose the metric used for color"></select>
       <label class="control-group" title="Scale fill opacity by another metric">
         Opacity metric
@@ -34,9 +34,14 @@
         Grid outline opacity
         <input id="strokeOpacity" type="range" min="0" max="1" step="0.05" value="0.6">
       </label>
-    </div>
-    <div class="control-section">
-      <div class="section-title">Colors</div>
+      <label class="control-group" title="Place optimized food bank stars at metro grid centroids">
+        Food banks
+        <span id="foodBankValue"></span>
+        <input id="foodBankCount" type="range" min="0" max="10" step="1" value="0">
+      </label>
+    </details>
+    <details class="control-section">
+      <summary class="section-title">Colors</summary>
       <label class="control-group" title="Color used for the low end of the scale">
         Low color
         <input id="colorLow" type="color" value="#b10026">
@@ -55,9 +60,9 @@
         <span id="colorHighValue"></span>
         <input id="stopHigh" type="range" min="0" max="100" step="1" value="100">
       </label>
-    </div>
-    <div class="control-section">
-      <div class="section-title">Overlays</div>
+    </details>
+    <details class="control-section">
+      <summary class="section-title">Overlays</summary>
       <label class="control-group" title="Toggle grocery store points">
         Show groceries
         <input id="groceryToggle" type="checkbox">
@@ -70,11 +75,11 @@
         Show bus stops
         <input id="busToggle" type="checkbox">
       </label>
-    </div>
-    <div class="control-section">
-      <div class="section-title">Export</div>
+    </details>
+    <details class="control-section">
+      <summary class="section-title">Export</summary>
       <button id="downloadBtn" title="Download summary CSV for the current metro">Download CSV</button>
-    </div>
+    </details>
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>

@@ -33,6 +33,17 @@ label.control-group span {
   font-size: 11px;
   color: #333;
 }
+.control-group #foodBankValue {
+  display: inline-block;
+  margin-left: 6px;
+  font-weight: 600;
+}
+.foodbank-star {
+  color: #f2c400;
+  font-size: 16px;
+  line-height: 16px;
+  text-shadow: 0 0 2px rgba(0,0,0,0.4);
+}
 .control-section {
   border-top: 1px solid #e3e3e3;
   margin-top: 8px;
@@ -49,6 +60,25 @@ label.control-group span {
   text-transform: uppercase;
   color: #555;
   margin-bottom: 4px;
+}
+details.control-section {
+  padding-top: 4px;
+}
+details.control-section > summary.section-title {
+  list-style: none;
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+details.control-section > summary.section-title::-webkit-details-marker {
+  display: none;
+}
+details.control-section > summary.section-title::after {
+  content: "▾";
+  float: right;
+  color: #777;
+}
+details.control-section:not([open]) > summary.section-title::after {
+  content: "▸";
 }
 .grocery-icon {
   font-size: 16px;

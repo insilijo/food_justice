@@ -1,6 +1,7 @@
 // Food Access Explorer (static Leaflet app) with data-driven color breaks
 
-let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl, groceryLayer, stationLayer, busLayer;
+let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl, groceryLayer, stationLayer, busLayer, foodBankLayer;
+const FOOD_BANK_MAX = 10;
 let state = {
   metro: null,
   geo: null,
@@ -14,6 +15,8 @@ let state = {
   metric: "coverage_pct",
   opacityMetric: "none",
   minAccessKey: "min_transit_minutes",
+  foodBankCount: 0,
+  currentData: null,
   showGroceries: false,
   showStations: false,
   showBusStops: false,
@@ -45,6 +48,8 @@ function initUI() {
   const colorHighValue = document.getElementById("colorHighValue");
   const metricSelect = document.getElementById("metricSelect");
   const opacityMetricSelect = document.getElementById("opacityMetricSelect");
+  const foodBankCount = document.getElementById("foodBankCount");
+  const foodBankValue = document.getElementById("foodBankValue");
   const timeModeSelect = document.getElementById("timeModeSelect");
   const groceryToggle = document.getElementById("groceryToggle");
   const stationToggle = document.getElementById("stationToggle");
@@ -95,6 +100,17 @@ function initUI() {
     state.opacityMetric = e.target.value;
     updateLayerStyle();
   };
+  if (foodBankCount) {
+    const updateFoodBankLabel = () => {
+      if (foodBankValue) foodBankValue.textContent = String(state.foodBankCount);
+    };
+    foodBankCount.oninput = e => {
+      state.foodBankCount = Number(e.target.value);
+      updateFoodBankLabel();
+      updateLayerStyle();
+    };
+    updateFoodBankLabel();
+  }
   groceryToggle.onchange = e => {
     state.showGroceries = e.target.checked;
     togglePOILayers();
@@ -397,6 +413,7 @@ function loadLayer() {
   fetch(path)
     .then(r => r.json())
     .then(data => {
+      state.currentData = data;
       computeDerivedMetrics(data);
       updateMinAccessKey(data);
       syncOpacityMetric();
@@ -417,17 +434,20 @@ function loadLayer() {
         }
       }).addTo(map);
       layerControl.addOverlay(currentLayer, "Food access layer");
+      updateFoodBankLayer(data);
     });
 }
 
 function updateLayerStyle() {
   if (!currentLayer) return;
-  updateMinAccessKey(currentLayer.toGeoJSON());
+  state.currentData = currentLayer.toGeoJSON();
+  updateMinAccessKey(state.currentData);
   syncOpacityMetric();
-  state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
-  state.opacityRange = layerRangeOpacity(currentLayer.toGeoJSON(), state.opacityMetric);
+  state.range = layerRange(state.currentData, metricKey());
+  state.opacityRange = layerRangeOpacity(state.currentData, state.opacityMetric);
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
+  updateFoodBankLayer(state.currentData);
 }
 
 function styleForFeature(f) {
@@ -520,6 +540,75 @@ function updateMinAccessKey(data) {
     : "min_transit_minutes";
 }
 
+function foodBankMinKey() {
+  if (state.foodBankCount <= 0 || state.geo !== "metro_grid") return null;
+  const count = Math.min(state.foodBankCount, FOOD_BANK_MAX);
+  if (state.mode === "walk") {
+    return `min_grocery_minutes_fb_${count}`;
+  }
+  return `min_access_minutes_fb_${count}`;
+}
+
+function updateFoodBankLayer(data) {
+  const layerData = data || state.currentData;
+  if (foodBankLayer) {
+    map.removeLayer(foodBankLayer);
+    layerControl.removeLayer(foodBankLayer);
+    foodBankLayer = null;
+  }
+  if (!layerData || !map || state.foodBankCount <= 0) return;
+  const count = Math.min(state.foodBankCount, FOOD_BANK_MAX);
+  const modeKey = state.mode === "walk" ? "walk" : "walk_transit";
+  const fbPath = `data/${state.metro}/foodbanks_${modeKey}.geojson`;
+
+  fetch(fbPath)
+    .then(r => r.ok ? r.json() : null)
+    .then(fbData => {
+      if (!fbData || !fbData.features) return;
+      const ranked = fbData.features
+        .slice()
+        .sort((a, b) => (a.properties?.rank ?? 999) - (b.properties?.rank ?? 999))
+        .slice(0, count);
+      if (!ranked.length) return;
+      const markers = ranked.map(f => {
+        const center = getFeatureCenter(f.geometry);
+        if (!center) return null;
+        return L.marker(center, {
+          icon: L.divIcon({
+            className: "foodbank-star",
+            html: "★",
+            iconSize: [16, 16],
+            iconAnchor: [8, 8]
+          })
+        });
+      }).filter(Boolean);
+      if (!markers.length) return;
+      foodBankLayer = L.layerGroup(markers).addTo(map);
+      layerControl.addOverlay(foodBankLayer, "Food banks (optimized)");
+    });
+  return;
+}
+
+function getFeatureCenter(geom) {
+  if (!geom) return null;
+  try {
+    const bounds = L.latLngBounds();
+    const addCoords = coords => {
+      if (!Array.isArray(coords)) return;
+      if (typeof coords[0] === "number" && typeof coords[1] === "number") {
+        bounds.extend([coords[1], coords[0]]);
+        return;
+      }
+      coords.forEach(addCoords);
+    };
+    addCoords(geom.coordinates);
+    if (!bounds.isValid()) return null;
+    return bounds.getCenter();
+  } catch (e) {
+    return null;
+  }
+}
+
 function seedMidStopFromMedian() {
   const min = state.range?.min ?? 0;
   const max = state.range?.max ?? 1;
@@ -552,6 +641,8 @@ function color(x, range) {
 
 function metricKey() {
   if (state.timeMode === "min_access") {
+    const fbKey = foodBankMinKey();
+    if (fbKey) return fbKey;
     if (state.mode === "walk") return "min_grocery_minutes";
     return state.minAccessKey || "min_transit_minutes";
   }
