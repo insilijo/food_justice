@@ -389,7 +389,6 @@ function loadLayer() {
 function updateLayerStyle() {
   if (!currentLayer) return;
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
-  seedMidStopFromMedian();
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
 }
