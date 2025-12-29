@@ -13,7 +13,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "los_angeles_ca": {
       "name": "Los Angeles\u2013Long Beach\u2013Anaheim, CA MSA",
@@ -28,7 +33,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "chicago_il_in": {
       "name": "Chicago\u2013Naperville\u2013Elgin, IL-IN MSA",
@@ -43,7 +53,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "dallas_fort_worth_tx": {
       "name": "Dallas\u2013Fort Worth\u2013Arlington, TX MSA",
@@ -58,7 +73,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "houston_tx": {
       "name": "Houston\u2013Pasadena\u2013The Woodlands, TX MSA",
@@ -73,7 +93,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "miami_fl": {
       "name": "Miami\u2013Fort Lauderdale\u2013West Palm Beach, FL MSA",
@@ -88,7 +113,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "washington_dc_va_md_wv": {
       "name": "Washington\u2013Arlington\u2013Alexandria, DC-VA-MD-WV MSA",
@@ -103,7 +133,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "atlanta_ga": {
       "name": "Atlanta\u2013Sandy Springs\u2013Roswell, GA MSA",
@@ -118,7 +153,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "philadelphia_pa_nj_de_md": {
       "name": "Philadelphia\u2013Camden\u2013Wilmington, PA-NJ-DE-MD MSA",
@@ -133,7 +173,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "phoenix_az": {
       "name": "Phoenix\u2013Mesa\u2013Chandler, AZ MSA",
@@ -148,7 +193,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "boston_ma_nh": {
       "name": "Boston\u2013Cambridge\u2013Newton, MA-NH MSA",
@@ -163,7 +213,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "riverside_san_bernardino_ca": {
       "name": "Riverside\u2013San Bernardino\u2013Ontario, CA MSA",
@@ -178,7 +233,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "san_francisco_bay_ca": {
       "name": "San Francisco\u2013Oakland\u2013Fremont, CA MSA",
@@ -193,7 +253,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "detroit_mi": {
       "name": "Detroit\u2013Warren\u2013Dearborn, MI MSA",
@@ -208,7 +273,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "seattle_wa": {
       "name": "Seattle\u2013Tacoma\u2013Bellevue, WA MSA",
@@ -223,7 +293,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "minneapolis_st_paul_mn_wi": {
       "name": "Minneapolis\u2013St. Paul\u2013Bloomington, MN-WI MSA",
@@ -238,7 +313,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "tampa_fl": {
       "name": "Tampa\u2013St. Petersburg\u2013Clearwater, FL MSA",
@@ -253,7 +333,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "san_diego_ca": {
       "name": "San Diego\u2013Chula Vista\u2013Carlsbad, CA MSA",
@@ -268,7 +353,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "denver_co": {
       "name": "Denver\u2013Aurora\u2013Centennial, CO MSA",
@@ -283,7 +373,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     },
     "orlando_fl": {
       "name": "Orlando\u2013Kissimmee\u2013Sanford, FL MSA",
@@ -298,7 +393,12 @@
         "zcta_id": "ZCTA5CE10",
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
-      }
+      },
+      "osm_buffer_km": 10,
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     }
   }
 }
