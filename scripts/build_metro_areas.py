@@ -41,6 +41,8 @@ GTFS_START_TIME = 17 * 3600
 GTFS_END_TIME = 19 * 3600
 GTFS_TRANSFER_PENALTY_MIN = 10.0
 GTFS_MIN_EDGE_SEC = 120.0
+FOODBANK_MAX = 10
+FOODBANK_CANDIDATE_CAP = 300
 
 # ---------------- Logging ----------------
 
@@ -423,6 +425,58 @@ def build_metro_grid(metro_geom, cell_size_m: float, crs) -> gpd.GeoDataFrame:
             rows.append({"GRID_ID": f"g{gid}", "_mask_geom": inter, "geometry": cell})
     return gpd.GeoDataFrame(rows, crs=crs)
 
+def greedy_foodbanks(
+    metro_grid: gpd.GeoDataFrame,
+    base_col: str,
+    pop_col: str,
+    max_banks: int = FOODBANK_MAX,
+    candidate_cap: int = FOODBANK_CANDIDATE_CAP,
+) -> tuple[list[int], dict]:
+    if base_col not in metro_grid.columns or pop_col not in metro_grid.columns:
+        return [], {}
+    centroids = metro_grid.geometry.centroid
+    coords = np.column_stack([centroids.x.to_numpy(), centroids.y.to_numpy()])
+    base = metro_grid[base_col].to_numpy(dtype=float)
+    pop = metro_grid[pop_col].fillna(0).to_numpy(dtype=float)
+    valid = np.isfinite(base) & (pop > 0)
+    if not np.any(valid):
+        valid = np.isfinite(base)
+        if not np.any(valid):
+            return [], {}
+        pop = np.where(valid, 1.0, 0.0)
+
+    cur = np.where(np.isfinite(base), base, np.inf)
+    score = np.where(valid, base * pop, 0.0)
+    cand_idx = np.where(score > 0)[0]
+    if cand_idx.size > candidate_cap:
+        top = np.argpartition(score[cand_idx], -candidate_cap)[-candidate_cap:]
+        cand_idx = cand_idx[top]
+
+    selected = []
+    columns = {}
+    for k in range(1, max_banks + 1):
+        best_gain = -1.0
+        best_idx = None
+        for idx in cand_idx:
+            dx = coords[:, 0] - coords[idx, 0]
+            dy = coords[:, 1] - coords[idx, 1]
+            dist = np.hypot(dx, dy) / WALK_METERS_PER_MIN
+            saved = np.maximum(cur - dist, 0)
+            gain = float(np.nansum(saved * pop))
+            if gain > best_gain:
+                best_gain = gain
+                best_idx = idx
+        if best_idx is None:
+            break
+        selected.append(int(best_idx))
+        dx = coords[:, 0] - coords[best_idx, 0]
+        dy = coords[:, 1] - coords[best_idx, 1]
+        dist = np.hypot(dx, dy) / WALK_METERS_PER_MIN
+        cur = np.minimum(cur, dist)
+        columns[f"{base_col}_fb_{k}"] = np.where(np.isfinite(cur), cur, np.nan)
+
+    return selected, columns
+
 def allocate_tract_attrs_to_grid(
     grid_gdf: gpd.GeoDataFrame,
     tracts_gdf: gpd.GeoDataFrame,
@@ -672,6 +726,17 @@ def build_one_metro(
         if g.empty:
             warn(f"{Path(path).name}: bbox prefilter returned 0 features; retrying without bbox.")
             g = gpd.read_file(path)
+        # Fix common case where CRS metadata is missing or wrong (degrees stored as projected).
+        if g.crs is None:
+            g = g.set_crs(4326)
+        else:
+            try:
+                bounds = g.total_bounds
+                deg_like = max(abs(bounds[0]), abs(bounds[2])) <= 180 and max(abs(bounds[1]), abs(bounds[3])) <= 90
+                if deg_like and g.crs.is_projected:
+                    g = g.set_crs(4326, allow_override=True)
+            except Exception:
+                pass
         return g.to_crs(crs_proj)
 
     # 1) Read only features near the metro (bbox filter at I/O time)
@@ -984,6 +1049,49 @@ def build_one_metro(
                     ]),
                     axis=0,
                 )
+        foodbank_layers = []
+        if len(metro_grid) and "POPULATION" in metro_grid.columns:
+            fb_walk_idx, fb_walk_cols = greedy_foodbanks(
+                metro_grid,
+                "min_grocery_minutes",
+                "POPULATION",
+                max_banks=FOODBANK_MAX,
+                candidate_cap=FOODBANK_CANDIDATE_CAP,
+            )
+            for col, vals in fb_walk_cols.items():
+                metro_grid[col] = vals
+            if fb_walk_idx:
+                fb_walk = gpd.GeoDataFrame(
+                    {
+                        "rank": range(1, len(fb_walk_idx) + 1),
+                        "mode": ["walk"] * len(fb_walk_idx),
+                    },
+                    geometry=metro_grid.geometry.centroid.iloc[fb_walk_idx].values,
+                    crs=metro_grid.crs,
+                )
+                foodbank_layers.append(("foodbanks_walk", fb_walk))
+            if "min_access_minutes" in metro_grid.columns:
+                fb_access_idx, fb_access_cols = greedy_foodbanks(
+                    metro_grid,
+                    "min_access_minutes",
+                    "POPULATION",
+                    max_banks=FOODBANK_MAX,
+                    candidate_cap=FOODBANK_CANDIDATE_CAP,
+                )
+                for col, vals in fb_access_cols.items():
+                    metro_grid[col] = vals
+                if fb_access_idx:
+                    fb_access = gpd.GeoDataFrame(
+                        {
+                            "rank": range(1, len(fb_access_idx) + 1),
+                            "mode": ["walk_transit"] * len(fb_access_idx),
+                        },
+                        geometry=metro_grid.geometry.centroid.iloc[fb_access_idx].values,
+                        crs=metro_grid.crs,
+                    )
+                    foodbank_layers.append(("foodbanks_walk_transit", fb_access))
+        for name, gdf in foodbank_layers:
+            gdf.to_crs(4326).to_file(out_dir / f"{name}.geojson", driver="GeoJSON")
         info(f"Metro grid cells: {len(metro_grid):,}")
 
     # 7) Transit proxy access (5-min to transit)
@@ -1001,6 +1109,10 @@ def build_one_metro(
     if tracts_for_scoring is not tracts:
         geo_layers.append(("tract_subgrid", tracts_for_scoring, tract_id, False, None))
     if not metro_grid.empty:
+        foodbank_cols = [
+            c for c in metro_grid.columns
+            if c.startswith("min_grocery_minutes_fb_") or c.startswith("min_access_minutes_fb_")
+        ]
         geo_layers.append((
             "metro_grid",
             metro_grid,
@@ -1018,6 +1130,7 @@ def build_one_metro(
                 "min_transit_minutes",
                 "min_access_minutes",
                 "min_gtfs_minutes",
+                *foodbank_cols,
             ],
         ))
     geo_layers.append(("tract", tracts_for_scoring, tract_id, tracts_for_scoring is not tracts, None))
