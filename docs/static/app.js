@@ -51,7 +51,7 @@ function initUI() {
 
   fillOpacity.oninput = e => {
     state.fillOpacity = Number(e.target.value);
-    if (currentLayer) currentLayer.setStyle({ fillOpacity: state.fillOpacity });
+    updateLayerStyle();
   };
   strokeOpacity.oninput = e => {
     state.strokeOpacity = Number(e.target.value);
@@ -192,33 +192,9 @@ function toggleTimeSelect() {
 
 function updateMetricOptions() {
   const metricSelect = document.getElementById("metricSelect");
-  if (state.timeMode === "min_access") {
-    metricSelect.innerHTML = "";
-    const o = document.createElement("option");
-    o.value = "min_minutes";
-    o.textContent = "Minimum minutes";
-    metricSelect.appendChild(o);
-    state.metric = "min_minutes";
-    metricSelect.value = state.metric;
-    if (opacityMetricSelect) {
-      opacityMetricSelect.innerHTML = "";
-      const on = document.createElement("option");
-      on.value = "none";
-      on.textContent = "None (uniform)";
-      opacityMetricSelect.appendChild(on);
-      const op = document.createElement("option");
-      op.value = "POPULATION";
-      op.textContent = "Population";
-      opacityMetricSelect.appendChild(op);
-      if (!["none", "POPULATION"].includes(state.opacityMetric)) {
-        state.opacityMetric = "none";
-      }
-      opacityMetricSelect.value = state.opacityMetric;
-    }
-    return;
-  }
   const base = [
     { value: "coverage_pct", label: "Coverage %" },
+    { value: "POPULATION", label: "Population" },
     { value: "pop_with_access", label: "Population w/ access" },
     { value: "pop_adjusted_coverage", label: "Pop-adjusted coverage" }
   ];
@@ -232,18 +208,28 @@ function updateMetricOptions() {
   ];
   const options = state.geo === "metro_grid" ? base.concat(metroGridExtras) : base;
 
-  metricSelect.innerHTML = "";
-  options.forEach(opt => {
+  if (state.timeMode === "min_access") {
+    metricSelect.innerHTML = "";
     const o = document.createElement("option");
-    o.value = opt.value;
-    o.textContent = opt.label;
+    o.value = "min_minutes";
+    o.textContent = "Minimum minutes";
     metricSelect.appendChild(o);
-  });
+    state.metric = "min_minutes";
+    metricSelect.value = state.metric;
+  } else {
+    metricSelect.innerHTML = "";
+    options.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      metricSelect.appendChild(o);
+    });
 
-  if (!options.find(o => o.value === state.metric)) {
-    state.metric = "coverage_pct";
+    if (!options.find(o => o.value === state.metric)) {
+      state.metric = "coverage_pct";
+    }
+    metricSelect.value = state.metric;
   }
-  metricSelect.value = state.metric;
 
   if (opacityMetricSelect) {
     opacityMetricSelect.innerHTML = "";
@@ -251,19 +237,21 @@ function updateMetricOptions() {
     on.value = "none";
     on.textContent = "None (uniform)";
     opacityMetricSelect.appendChild(on);
-    const op = document.createElement("option");
-    op.value = "POPULATION";
-    op.textContent = "Population";
-    opacityMetricSelect.appendChild(op);
-    const oa = document.createElement("option");
-    oa.value = "pop_with_access";
-    oa.textContent = "Population w/ access";
-    opacityMetricSelect.appendChild(oa);
-    if (!["none", "POPULATION", "pop_with_access"].includes(state.opacityMetric)) {
+    options.forEach(opt => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      opacityMetricSelect.appendChild(o);
+    });
+    if (!["none", ...options.map(o => o.value)].includes(state.opacityMetric)) {
       state.opacityMetric = "none";
     }
     opacityMetricSelect.value = state.opacityMetric;
   }
+  if (state.timeMode === "min_access") {
+    return;
+  }
+
 }
 
 function loadBoundary(meta) {
@@ -381,7 +369,7 @@ function getBreaks(meta) {
 function layerRange(data, metric) {
   const vals = [];
   data.features.forEach(f => {
-    const v = Number(f.properties[metric]);
+    const v = parseMetricValue(f.properties[metric]);
     if (!isNaN(v)) vals.push(v);
   });
   if (!vals.length) return { min: 0, max: 1, median: 0 };
@@ -409,9 +397,10 @@ function loadLayer() {
     .then(r => r.json())
     .then(data => {
       computeDerivedMetrics(data);
+      syncOpacityMetric();
       const range = layerRange(data, metricKey());
       state.range = range;
-      state.opacityRange = layerRange(data, state.opacityMetric);
+      state.opacityRange = layerRangeOpacity(data, state.opacityMetric);
       seedMidStopFromMedian();
       updateColorRangeLabels();
       currentLayer = L.geoJSON(data, {
@@ -431,8 +420,9 @@ function loadLayer() {
 
 function updateLayerStyle() {
   if (!currentLayer) return;
+  syncOpacityMetric();
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
-  state.opacityRange = layerRange(currentLayer.toGeoJSON(), state.opacityMetric);
+  state.opacityRange = layerRangeOpacity(currentLayer.toGeoJSON(), state.opacityMetric);
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
 }
@@ -472,14 +462,51 @@ function featureOpacity(f) {
   if (!state.opacityMetric || state.opacityMetric === "none") {
     return state.fillOpacity;
   }
-  const v = Number(f?.properties?.[state.opacityMetric]);
-  if (isNaN(v)) return state.fillOpacity * 0.1;
+  const v = parseMetricValue(f?.properties?.[state.opacityMetric]);
+  if (isNaN(v)) return 0;
   const min = state.opacityRange?.min ?? 0;
   const max = state.opacityRange?.max ?? 1;
   const denom = max - min;
-  const t = denom > 0 ? (v - min) / denom : 0;
+  if (denom <= 0) return state.fillOpacity;
+  const t = (v - min) / denom;
   const pct = Math.max(0, Math.min(1, t));
   return state.fillOpacity * pct;
+}
+
+function parseMetricValue(val) {
+  if (val === null || val === undefined) return NaN;
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const cleaned = val.replace(/,/g, "");
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : NaN;
+  }
+  const num = Number(val);
+  return Number.isFinite(num) ? num : NaN;
+}
+
+function syncOpacityMetric() {
+  const opacityMetricSelect = document.getElementById("opacityMetricSelect");
+  if (opacityMetricSelect && opacityMetricSelect.value) {
+    state.opacityMetric = opacityMetricSelect.value;
+  }
+}
+
+function layerRangeOpacity(data, metric) {
+  if (!metric || metric === "none") return { min: 0, max: 1, median: 0 };
+  const vals = [];
+  data.features.forEach(f => {
+    const v = parseMetricValue(f.properties[metric]);
+    if (!isNaN(v)) vals.push(v);
+  });
+  if (!vals.length) return { min: 0, max: 1, median: 0 };
+  vals.sort((a, b) => a - b);
+  const mid = Math.floor(vals.length / 2);
+  const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+  const min = vals[0];
+  const p95 = vals[Math.floor(0.95 * (vals.length - 1))];
+  const max = p95 > 0 ? p95 : vals[vals.length - 1];
+  return { min, max, median };
 }
 
 function seedMidStopFromMedian() {
