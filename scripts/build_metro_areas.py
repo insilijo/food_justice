@@ -37,8 +37,10 @@ from tqdm.auto import tqdm
 
 WALK_METERS_PER_MIN = 75  # ~4.5 km/h
 GTFS_WALK_RADIUS_M = 400  # meters around stops to consider grocery access
-GTFS_START_TIME = 8 * 3600
-GTFS_END_TIME = 22 * 3600
+GTFS_START_TIME = 17 * 3600
+GTFS_END_TIME = 19 * 3600
+GTFS_TRANSFER_PENALTY_MIN = 10.0
+GTFS_MIN_EDGE_SEC = 120.0
 
 # ---------------- Logging ----------------
 
@@ -164,7 +166,10 @@ def build_gtfs_stop_graph(gtfs_dir: Path) -> tuple[nx.DiGraph, gpd.GeoDataFrame,
     st["route_id"] = st["route_id"].astype(str)
     st = st.dropna(subset=["next_stop_id", "next_arrival_sec"])
     st["travel_sec"] = st["next_arrival_sec"] - st["departure_sec"]
-    st = st[st["travel_sec"] > 0]
+    st = st[
+        (st["travel_sec"] >= GTFS_MIN_EDGE_SEC)
+        & (st["stop_id"].astype(str) != st["next_stop_id"].astype(str))
+    ]
 
     edges = (
         st.groupby(["stop_id", "next_stop_id", "route_id"])["travel_sec"]
@@ -860,7 +865,7 @@ def build_one_metro(
             metro_grid["min_access_minutes"] = min_access
         gtfs_dir = Path(str(meta.get("gtfs_path", ""))) if meta.get("gtfs_path") else None
         if gtfs_dir and gtfs_dir.exists():
-            info("Computing simplified GTFS access (avg in-vehicle + transfer penalties)...")
+            info("Computing simplified GTFS access (avg in-vehicle + 10-min transfer penalties, 5-7pm)...")
             Gt, stops_gdf, routes_by_stop = build_gtfs_stop_graph(gtfs_dir)
             if Gt is not None and stops_gdf is not None and len(stops_gdf) and len(groceries):
                 stops_proj = stops_gdf.to_crs(crs_proj)
@@ -892,7 +897,17 @@ def build_one_metro(
                     "stop_id",
                 ].tolist()
                 if grocery_stop_ids and routes_by_stop:
-                    Gt_rev = Gt.reverse(copy=True)
+                    Gt_exp = nx.DiGraph()
+                    for stop_id, routes in routes_by_stop.items():
+                        for rid in routes:
+                            Gt_exp.add_node((str(stop_id), str(rid), 0))
+                            Gt_exp.add_node((str(stop_id), str(rid), 1))
+
+                    for u, v, data in Gt.edges(data=True):
+                        w = float(data.get("weight", 0.0))
+                        Gt_exp.add_edge((u[0], u[1], 0), (v[0], v[1], 1), weight=w)
+                        Gt_exp.add_edge((u[0], u[1], 1), (v[0], v[1], 1), weight=w)
+
                     for stop_id, routes in routes_by_stop.items():
                         routes = list(routes)
                         if len(routes) > 1:
@@ -900,8 +915,18 @@ def build_one_metro(
                                 for r2 in routes:
                                     if r1 == r2:
                                         continue
-                                    Gt_rev.add_edge((stop_id, r1), (stop_id, r2), weight=10.0)
-                    Gt_rev.add_node("__GROCERY__")
+                                    Gt_exp.add_edge(
+                                        (str(stop_id), str(r1), 0),
+                                        (str(stop_id), str(r2), 0),
+                                        weight=GTFS_TRANSFER_PENALTY_MIN,
+                                    )
+                                    Gt_exp.add_edge(
+                                        (str(stop_id), str(r1), 1),
+                                        (str(stop_id), str(r2), 1),
+                                        weight=GTFS_TRANSFER_PENALTY_MIN,
+                                    )
+
+                    Gt_exp.add_node("__GROCERY__")
                     grocery_walk = (
                         stops_proj.set_index("stop_id")["walk_to_grocery_min"].to_dict()
                     )
@@ -909,10 +934,14 @@ def build_one_metro(
                         for rid in routes_by_stop.get(str(sid), []):
                             w = float(grocery_walk.get(str(sid), np.nan))
                             if not np.isnan(w):
-                                Gt_rev.add_edge("__GROCERY__", (str(sid), str(rid)), weight=w)
+                                Gt_exp.add_edge(
+                                    (str(sid), str(rid), 1),
+                                    "__GROCERY__",
+                                    weight=w,
+                                )
 
                     gtfs_lengths = nx.single_source_dijkstra_path_length(
-                        Gt_rev,
+                        Gt_exp.reverse(copy=True),
                         "__GROCERY__",
                         weight="weight",
                     )
@@ -937,7 +966,7 @@ def build_one_metro(
                     walk_to_stop = pt.distance(stop_geom) / WALK_METERS_PER_MIN
                     best = np.nan
                     for rid in routes_by_stop.get(stop_id, []):
-                        val = gtfs_lengths.get((stop_id, str(rid)))
+                        val = gtfs_lengths.get((stop_id, str(rid), 0))
                         if val is None:
                             continue
                         if np.isnan(best) or val < best:
