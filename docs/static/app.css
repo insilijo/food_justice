@@ -33,6 +33,23 @@ label.control-group span {
   font-size: 11px;
   color: #333;
 }
+.control-section {
+  border-top: 1px solid #e3e3e3;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.control-section:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+.section-title {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 4px;
+}
 .grocery-icon {
   font-size: 16px;
   line-height: 18px;
