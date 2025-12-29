@@ -1,3 +1,5 @@
 api.txt
-data_inputs/_raw/*
-cache/*
+data_inputs/
+MBTA_GTFS/
+cache/
+.venv/
