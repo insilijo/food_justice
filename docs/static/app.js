@@ -37,6 +37,9 @@ function initUI() {
   const stopLow = document.getElementById("stopLow");
   const stopMid = document.getElementById("stopMid");
   const stopHigh = document.getElementById("stopHigh");
+  const colorLowValue = document.getElementById("colorLowValue");
+  const colorMidValue = document.getElementById("colorMidValue");
+  const colorHighValue = document.getElementById("colorHighValue");
   const metricSelect = document.getElementById("metricSelect");
   const timeModeSelect = document.getElementById("timeModeSelect");
   const groceryToggle = document.getElementById("groceryToggle");
@@ -361,6 +364,7 @@ function loadLayer() {
       computeDerivedMetrics(data);
       const range = layerRange(data, metricKey());
       state.range = range;
+      updateColorRangeLabels();
       currentLayer = L.geoJSON(data, {
         style: styleForFeature,
         onEachFeature: (f, l) => {
@@ -379,6 +383,7 @@ function loadLayer() {
 function updateLayerStyle() {
   if (!currentLayer) return;
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
+  updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
 }
 
@@ -393,16 +398,25 @@ function styleForFeature(f) {
   };
 }
 
+function updateColorRangeLabels() {
+  const min = state.range?.min ?? 0;
+  const max = state.range?.max ?? 1;
+  const mid = min + (max - min) * state.colorStops.mid;
+  const lowEl = document.getElementById("colorLowValue");
+  const midEl = document.getElementById("colorMidValue");
+  const highEl = document.getElementById("colorHighValue");
+  if (lowEl) lowEl.textContent = `Min: ${formatMetricValue(min, metricKey())}`;
+  if (midEl) midEl.textContent = `Mid: ${formatMetricValue(mid, metricKey())}`;
+  if (highEl) highEl.textContent = `Max: ${formatMetricValue(max, metricKey())}`;
+}
+
 function color(x, range) {
   if (isNaN(x)) return "#000";
   const min = range?.min ?? 0;
   const max = range?.max ?? 1;
   const denom = max - min;
   const t = denom > 0 ? (x - min) / denom : 0;
-  let pct = Math.max(0, Math.min(1, t));
-  if (metricKey().startsWith("min_")) {
-    pct = 1 - pct;
-  }
+  const pct = Math.max(0, Math.min(1, t));
   return lerp3(
     state.colorStops.colorLow,
     state.colorStops.colorMid,
@@ -416,7 +430,7 @@ function color(x, range) {
 
 function metricKey() {
   if (state.timeMode === "min_access") {
-    return state.mode === "walk" ? "min_grocery_minutes" : "min_gtfs_minutes";
+    return state.mode === "walk" ? "min_grocery_minutes" : "min_transit_minutes";
   }
   return state.metric;
 }
@@ -457,6 +471,10 @@ function computeDerivedMetrics(data) {
 
 function formatMetric(props, metric) {
   const v = Number(props?.[metric]);
+  return formatMetricValue(v, metric);
+}
+
+function formatMetricValue(v, metric) {
   if (isNaN(v)) return "n/a";
   if (
     metric.endsWith("_share") ||
@@ -466,11 +484,11 @@ function formatMetric(props, metric) {
   ) {
     return `${(v * 100).toFixed(1)}%`;
   }
-  if (metric === "min_minutes") {
-    return `${Math.round(v)} min`;
-  }
   if (metric === "MEDIAN_RENT_PER_ROOM") {
     return `$${Math.round(v)}`;
+  }
+  if (metric.startsWith("min_")) {
+    return `${Math.round(v)} min`;
   }
   return Math.round(v).toLocaleString();
 }

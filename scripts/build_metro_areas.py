@@ -130,16 +130,16 @@ def parse_hhmmss_to_seconds(val: str) -> float | None:
     except Exception:
         return None
 
-def build_gtfs_stop_graph(gtfs_dir: Path) -> tuple[nx.DiGraph, gpd.GeoDataFrame] | tuple[None, None]:
+def build_gtfs_stop_graph(gtfs_dir: Path) -> tuple[nx.DiGraph, gpd.GeoDataFrame, dict] | tuple[None, None, None]:
     stops_path = gtfs_dir / "stops.txt"
     stop_times_path = gtfs_dir / "stop_times.txt"
     trips_path = gtfs_dir / "trips.txt"
     calendar_path = gtfs_dir / "calendar.txt"
     if not (stops_path.exists() and stop_times_path.exists() and trips_path.exists() and calendar_path.exists()):
-        return None, None
+        return None, None, None
 
     stops = pd.read_csv(stops_path, usecols=["stop_id", "stop_name", "stop_lat", "stop_lon"])
-    trips = pd.read_csv(trips_path, usecols=["trip_id", "service_id"])
+    trips = pd.read_csv(trips_path, usecols=["trip_id", "service_id", "route_id"])
     cal = pd.read_csv(calendar_path, usecols=["service_id", "monday"])
     weekday_services = set(cal.loc[cal["monday"] == 1, "service_id"].astype(str))
     trips = trips[trips["service_id"].astype(str).isin(weekday_services)]
@@ -148,6 +148,8 @@ def build_gtfs_stop_graph(gtfs_dir: Path) -> tuple[nx.DiGraph, gpd.GeoDataFrame]
     st = pd.read_csv(
         stop_times_path,
         usecols=["trip_id", "arrival_time", "departure_time", "stop_id", "stop_sequence"],
+        dtype={"trip_id": str, "stop_id": str, "stop_sequence": int},
+        low_memory=False,
     )
     st = st[st["trip_id"].astype(str).isin(trip_ids)]
     st["departure_sec"] = st["departure_time"].apply(parse_hhmmss_to_seconds)
@@ -155,29 +157,37 @@ def build_gtfs_stop_graph(gtfs_dir: Path) -> tuple[nx.DiGraph, gpd.GeoDataFrame]
     st = st.dropna(subset=["departure_sec", "arrival_sec"])
     st = st[(st["departure_sec"] >= GTFS_START_TIME) & (st["departure_sec"] <= GTFS_END_TIME)]
 
+    st = st.merge(trips[["trip_id", "route_id"]], on="trip_id", how="left")
     st = st.sort_values(["trip_id", "stop_sequence"])
     st["next_stop_id"] = st.groupby("trip_id")["stop_id"].shift(-1)
     st["next_arrival_sec"] = st.groupby("trip_id")["arrival_sec"].shift(-1)
+    st["route_id"] = st["route_id"].astype(str)
     st = st.dropna(subset=["next_stop_id", "next_arrival_sec"])
     st["travel_sec"] = st["next_arrival_sec"] - st["departure_sec"]
     st = st[st["travel_sec"] > 0]
 
     edges = (
-        st.groupby(["stop_id", "next_stop_id"])["travel_sec"]
-        .min()
+        st.groupby(["stop_id", "next_stop_id", "route_id"])["travel_sec"]
+        .mean()
         .reset_index()
     )
 
     Gt = nx.DiGraph()
     for row in edges.itertuples(index=False):
-        Gt.add_edge(str(row.stop_id), str(row.next_stop_id), weight=float(row.travel_sec) / 60.0)
+        u = (str(row.stop_id), str(row.route_id))
+        v = (str(row.next_stop_id), str(row.route_id))
+        Gt.add_edge(u, v, weight=float(row.travel_sec) / 60.0)
 
     stops_gdf = gpd.GeoDataFrame(
         stops,
         geometry=gpd.points_from_xy(stops["stop_lon"], stops["stop_lat"]),
         crs="EPSG:4326",
     )
-    return Gt, stops_gdf
+    routes_by_stop = {}
+    for row in edges.itertuples(index=False):
+        routes_by_stop.setdefault(str(row.stop_id), set()).add(str(row.route_id))
+        routes_by_stop.setdefault(str(row.next_stop_id), set()).add(str(row.route_id))
+    return Gt, stops_gdf, routes_by_stop
 
 def fetch_tract_population_by_county(year: int, state: str, county: str, api_key: str) -> pd.DataFrame:
     """
@@ -590,7 +600,10 @@ def build_one_metro(
     info(f"Groceries: {len(groceries):,} points; Transit: {len(transit):,} points")
 
     groceries.to_crs(4326).to_file(out_dir / "groceries.geojson", driver="GeoJSON")
-    transit.to_crs(4326).to_file(out_dir / "transit.geojson", driver="GeoJSON")
+    stations = transit[
+        (transit.get("railway") == "station") | (transit.get("public_transport") == "station")
+    ].copy()
+    stations.to_crs(4326).to_file(out_dir / "transit.geojson", driver="GeoJSON")
 
     # Vectorized nearest node lookup (much faster than Python loops)
     g_x = groceries.geometry.x.to_numpy()
@@ -847,31 +860,60 @@ def build_one_metro(
             metro_grid["min_access_minutes"] = min_access
         gtfs_dir = Path(str(meta.get("gtfs_path", ""))) if meta.get("gtfs_path") else None
         if gtfs_dir and gtfs_dir.exists():
-            info("Computing GTFS transit travel time to groceries...")
-            Gt, stops_gdf = build_gtfs_stop_graph(gtfs_dir)
-            if Gt is not None and stops_gdf is not None and len(stops_gdf):
+            info("Computing simplified GTFS access (avg in-vehicle + transfer penalties)...")
+            Gt, stops_gdf, routes_by_stop = build_gtfs_stop_graph(gtfs_dir)
+            if Gt is not None and stops_gdf is not None and len(stops_gdf) and len(groceries):
                 stops_proj = stops_gdf.to_crs(crs_proj)
                 stops_proj["stop_id"] = stops_proj["stop_id"].astype(str)
-                grocery_pts = groceries.geometry
-                if len(grocery_pts):
-                    sidx = grocery_pts.sindex
-                    def near_grocery(geom):
-                        idx = list(sidx.nearest(geom, 1))
-                        if not idx:
-                            return False
-                        nearest = grocery_pts.iloc[idx[0]]
-                        return geom.distance(nearest) <= GTFS_WALK_RADIUS_M
+                grocery_pts = groceries.geometry.reset_index(drop=True)
+                sidx = grocery_pts.sindex
 
-                    stops_proj["near_grocery"] = stops_proj.geometry.apply(near_grocery)
-                    grocery_stop_ids = stops_proj.loc[stops_proj["near_grocery"], "stop_id"].tolist()
-                else:
-                    grocery_stop_ids = []
+                def first_index(res):
+                    if isinstance(res, tuple):
+                        res = res[0]
+                    if not isinstance(res, (list, tuple, np.ndarray)):
+                        res = list(res)
+                    arr = np.asarray(res).ravel()
+                    return int(arr[0]) if arr.size else None
 
-                if grocery_stop_ids:
-                    Gt_rev = Gt.reverse(copy=False)
-                    gtfs_lengths = nx.multi_source_dijkstra_path_length(
+                def nearest_grocery_index(geom):
+                    return first_index(sidx.nearest(geom, 1))
+
+                def walk_to_grocery(geom):
+                    idx = nearest_grocery_index(geom)
+                    if idx is None:
+                        return np.nan
+                    nearest = grocery_pts.iloc[idx]
+                    return float(geom.distance(nearest)) / WALK_METERS_PER_MIN
+
+                stops_proj["walk_to_grocery_min"] = stops_proj.geometry.apply(walk_to_grocery)
+                grocery_stop_ids = stops_proj.loc[
+                    stops_proj["walk_to_grocery_min"] <= (GTFS_WALK_RADIUS_M / WALK_METERS_PER_MIN),
+                    "stop_id",
+                ].tolist()
+                if grocery_stop_ids and routes_by_stop:
+                    Gt_rev = Gt.reverse(copy=True)
+                    for stop_id, routes in routes_by_stop.items():
+                        routes = list(routes)
+                        if len(routes) > 1:
+                            for r1 in routes:
+                                for r2 in routes:
+                                    if r1 == r2:
+                                        continue
+                                    Gt_rev.add_edge((stop_id, r1), (stop_id, r2), weight=10.0)
+                    Gt_rev.add_node("__GROCERY__")
+                    grocery_walk = (
+                        stops_proj.set_index("stop_id")["walk_to_grocery_min"].to_dict()
+                    )
+                    for sid in grocery_stop_ids:
+                        for rid in routes_by_stop.get(str(sid), []):
+                            w = float(grocery_walk.get(str(sid), np.nan))
+                            if not np.isnan(w):
+                                Gt_rev.add_edge("__GROCERY__", (str(sid), str(rid)), weight=w)
+
+                    gtfs_lengths = nx.single_source_dijkstra_path_length(
                         Gt_rev,
-                        grocery_stop_ids,
+                        "__GROCERY__",
                         weight="weight",
                     )
                 else:
@@ -880,19 +922,31 @@ def build_one_metro(
                 stop_points = stops_proj.geometry
                 stop_index = stop_points.sindex
                 centroids = metro_grid.geometry.centroid
+
+                def nearest_stop_index(geom):
+                    return first_index(stop_index.nearest(geom, 1))
+
                 gtfs_min = []
                 for pt in centroids:
-                    idx = list(stop_index.nearest(pt, 1))
-                    if not idx:
+                    idx = nearest_stop_index(pt)
+                    if idx is None:
                         gtfs_min.append(np.nan)
                         continue
-                    stop_id = stops_proj.iloc[idx[0]]["stop_id"]
-                    walk_min = pt.distance(stops_proj.iloc[idx[0]].geometry) / WALK_METERS_PER_MIN
-                    in_vehicle = gtfs_lengths.get(stop_id)
-                    if in_vehicle is None:
+                    stop_geom = stops_proj.iloc[idx].geometry
+                    stop_id = str(stops_proj.iloc[idx]["stop_id"])
+                    walk_to_stop = pt.distance(stop_geom) / WALK_METERS_PER_MIN
+                    best = np.nan
+                    for rid in routes_by_stop.get(stop_id, []):
+                        val = gtfs_lengths.get((stop_id, str(rid)))
+                        if val is None:
+                            continue
+                        if np.isnan(best) or val < best:
+                            best = float(val)
+                    if np.isnan(best):
                         gtfs_min.append(np.nan)
                     else:
-                        gtfs_min.append(float(in_vehicle) + float(walk_min))
+                        gtfs_min.append(float(best) + float(walk_to_stop))
+
                 metro_grid["min_gtfs_minutes"] = gtfs_min
                 metro_grid["min_access_minutes"] = np.nanmin(
                     np.vstack([

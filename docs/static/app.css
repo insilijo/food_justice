@@ -27,6 +27,12 @@ label.control-group input[type="color"] {
   padding: 0;
   border: none;
 }
+label.control-group span {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #333;
+}
 .grocery-icon {
   font-size: 16px;
   line-height: 18px;

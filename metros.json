@@ -20,6 +20,7 @@
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
+      "gtfs_path": "MBTA_GTFS",
       "max_seeds": 300
     }
   }
