@@ -13,6 +13,7 @@ let state = {
   opacityRange: { min: 0, max: 1 },
   metric: "coverage_pct",
   opacityMetric: "none",
+  minAccessKey: "min_transit_minutes",
   showGroceries: false,
   showStations: false,
   showBusStops: false,
@@ -397,6 +398,7 @@ function loadLayer() {
     .then(r => r.json())
     .then(data => {
       computeDerivedMetrics(data);
+      updateMinAccessKey(data);
       syncOpacityMetric();
       const range = layerRange(data, metricKey());
       state.range = range;
@@ -420,6 +422,7 @@ function loadLayer() {
 
 function updateLayerStyle() {
   if (!currentLayer) return;
+  updateMinAccessKey(currentLayer.toGeoJSON());
   syncOpacityMetric();
   state.range = layerRange(currentLayer.toGeoJSON(), metricKey());
   state.opacityRange = layerRangeOpacity(currentLayer.toGeoJSON(), state.opacityMetric);
@@ -509,6 +512,14 @@ function layerRangeOpacity(data, metric) {
   return { min, max, median };
 }
 
+function updateMinAccessKey(data) {
+  if (state.timeMode !== "min_access" || state.mode !== "walk_transit") return;
+  const props = data?.features?.[0]?.properties || {};
+  state.minAccessKey = Object.prototype.hasOwnProperty.call(props, "min_access_minutes")
+    ? "min_access_minutes"
+    : "min_transit_minutes";
+}
+
 function seedMidStopFromMedian() {
   const min = state.range?.min ?? 0;
   const max = state.range?.max ?? 1;
@@ -542,7 +553,7 @@ function color(x, range) {
 function metricKey() {
   if (state.timeMode === "min_access") {
     if (state.mode === "walk") return "min_grocery_minutes";
-    return state.geo === "metro_grid" ? "min_gtfs_minutes" : "min_transit_minutes";
+    return state.minAccessKey || "min_transit_minutes";
   }
   return state.metric;
 }
