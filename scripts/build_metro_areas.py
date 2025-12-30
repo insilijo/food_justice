@@ -33,7 +33,7 @@ import requests
 import numpy as np
 from pyproj import CRS, Transformer
 from shapely.geometry import box
-from shapely.ops import unary_union
+from shapely.ops import unary_union, transform
 from tqdm.auto import tqdm
 
 WALK_METERS_PER_MIN = 75  # ~4.5 km/h
@@ -629,6 +629,28 @@ def buffer_polygon_km(poly_4326, buffer_km: float):
     buffered = series.buffer(buffer_km * 1000).to_crs(4326).iloc[0]
     return buffered
 
+def tile_polygon_km(poly_4326, tile_km: float):
+    if not tile_km or tile_km <= 0:
+        return [poly_4326]
+    poly_proj, crs_proj = ox.project_geometry(poly_4326)
+    minx, miny, maxx, maxy = poly_proj.bounds
+    tile_m = float(tile_km) * 1000.0
+    transformer = Transformer.from_crs(crs_proj, CRS.from_epsg(4326), always_xy=True)
+    tiles = []
+    x = minx
+    while x < maxx:
+        y = miny
+        x2 = min(x + tile_m, maxx)
+        while y < maxy:
+            y2 = min(y + tile_m, maxy)
+            cell = box(x, y, x2, y2)
+            inter = poly_proj.intersection(cell)
+            if not inter.is_empty:
+                tiles.append(transform(transformer.transform, inter))
+            y = y2
+        x = x2
+    return tiles
+
 # ---------------- Main build per metro ----------------
 
 def build_one_metro(
@@ -640,6 +662,7 @@ def build_one_metro(
     minutes_list: list[int],
     max_seeds: int,
     osm_buffer_km: float,
+    walk_tile_km: float,
     walk_filter: str | None,
     kde_smooth_enabled: bool,
     tract_subdivide_m: float,
@@ -658,6 +681,7 @@ def build_one_metro(
         "Settings: "
         f"max_seeds={max_seeds}, "
         f"osm_buffer_km={osm_buffer_km}, "
+        f"walk_tile_km={walk_tile_km}, "
         f"walk_filter={'custom' if walk_filter else 'default'}, "
         f"kde={kde_smooth_enabled}, "
         f"tract_subdivide_m={tract_subdivide_m}, "
@@ -680,7 +704,12 @@ def build_one_metro(
     if buffer_km > 0:
         info(f"Using OSM buffer: +{buffer_km:.1f} km for network + POI pulls.")
 
-    info("Downloading walking network from OSM (chunked by place)...")
+    tile_km = float(walk_tile_km or 0)
+    tiles = tile_polygon_km(osm_poly_4326, tile_km) if tile_km > 0 else []
+    if tile_km > 0 and len(tiles) > 1:
+        info(f"Downloading walking network from OSM (tiling ~{tile_km:.0f} km, {len(tiles)} tiles)...")
+    else:
+        info("Downloading walking network from OSM (chunked by place)...")
     graph_kwargs = {
         "network_type": "walk",
         "simplify": True,
@@ -690,16 +719,23 @@ def build_one_metro(
     if walk_filter:
         graph_kwargs["custom_filter"] = walk_filter
     graphs = []
-    for idx, place_gdf in enumerate(place_gdfs, start=1):
-        place_poly = place_gdf.geometry.values[0]
-        place_poly = buffer_polygon_km(place_poly, buffer_km)
-        info(f"Downloading walking network chunk {idx}/{len(place_gdfs)} from OSM...")
-        graphs.append(ox.graph_from_polygon(place_poly, **graph_kwargs))
+    if tiles:
+        for idx, tile in enumerate(tiles, start=1):
+            info(f"Downloading walking network tile {idx}/{len(tiles)} from OSM...")
+            g = ox.graph_from_polygon(tile, **graph_kwargs)
+            if len(g.nodes) and len(g.edges):
+                graphs.append(g)
+    else:
+        for idx, place_gdf in enumerate(place_gdfs, start=1):
+            place_poly = place_gdf.geometry.values[0]
+            place_poly = buffer_polygon_km(place_poly, buffer_km)
+            info(f"Downloading walking network chunk {idx}/{len(place_gdfs)} from OSM...")
+            g = ox.graph_from_polygon(place_poly, **graph_kwargs)
+            if len(g.nodes) and len(g.edges):
+                graphs.append(g)
     if not graphs:
-        raise ValueError("No place polygons available for OSM network download.")
-    G = graphs[0]
-    for g in graphs[1:]:
-        G = nx.compose(G, g)
+        raise ValueError("No OSM graph data returned for network download.")
+    G = nx.compose_all(graphs)
     G = ox.project_graph(G)
     G = add_travel_time(G)
     crs_proj = G.graph["crs"]
@@ -1262,6 +1298,7 @@ def main():
     ap.add_argument("--minutes", default="10,15,20", help="Comma-separated minutes thresholds")
     ap.add_argument("--max-seeds", type=int, default=800, help="Max seed nodes for isochrone unions (0 = no cap)")
     ap.add_argument("--osm-buffer-km", type=float, default=None, help="Expand OSM network + POI queries by km beyond metro boundary")
+    ap.add_argument("--walk-tile-km", type=float, default=None, help="Tile size (km) for walking network download (0 = no tiling)")
     ap.add_argument(
         "--walk-filter",
         default=None,
@@ -1283,6 +1320,11 @@ def main():
             if args.osm_buffer_km is not None
             else float(meta.get("osm_buffer_km", 0) or 0)
         )
+        walk_tile_km = (
+            float(args.walk_tile_km)
+            if args.walk_tile_km is not None
+            else float(meta.get("walk_tile_km", 0) or 0)
+        )
         walk_filter = meta.get("walk_filter", args.walk_filter)
         kde_enabled = bool(meta.get("kde", args.kde))
         tract_subdivide_m = float(meta.get("tract_subdivide_m", args.tract_subdivide_m) or 0)
@@ -1298,6 +1340,7 @@ def main():
             minutes_list,
             max_seeds,
             osm_buffer_km,
+            walk_tile_km,
             walk_filter,
             kde_enabled,
             tract_subdivide_m,
