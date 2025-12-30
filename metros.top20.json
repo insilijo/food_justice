@@ -14,11 +14,11 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 0,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
-      "max_seeds": 300
+      "max_seeds": 150
     },
     "los_angeles_ca": {
       "name": "Los Angeles\u2013Long Beach\u2013Anaheim, CA MSA",
@@ -34,11 +34,11 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 0,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
-      "max_seeds": 300
+      "max_seeds": 150
     },
     "chicago_il_in": {
       "name": "Chicago\u2013Naperville\u2013Elgin, IL-IN MSA",
@@ -54,7 +54,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 5,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -74,7 +74,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 2,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -94,7 +94,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 2,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -154,7 +154,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 5,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -174,7 +174,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 5,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -194,7 +194,7 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 2,
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,

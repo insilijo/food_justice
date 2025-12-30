@@ -71,11 +71,27 @@ label.control-group span {
 }
 .axis-hist {
   position: absolute;
-  pointer-events: none;
+  pointer-events: auto;
   background: rgba(255, 255, 255, 0.85);
   z-index: 900;
   width: 100%;
   height: 100%;
+}
+.axis-hist rect {
+  cursor: pointer;
+}
+
+#histogramTooltip {
+  position: absolute;
+  z-index: 950;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  transform: translate(-50%, -100%);
+  white-space: nowrap;
 }
 .axis-hist-x {
   top: 6px;

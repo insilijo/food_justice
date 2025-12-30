@@ -613,6 +613,12 @@ function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
   if (!counts.length) return;
   const maxOverlay = overlayCounts && overlayCounts.length ? Math.max(...overlayCounts) : 0;
   const maxCount = Math.max(...counts, maxOverlay, 1);
+  const addClickLabel = (el, text) => {
+    el.addEventListener("click", evt => {
+      evt.stopPropagation();
+      showHistogramTooltip(text, evt);
+    });
+  };
 
   if (axis === "x") {
     const barW = w / counts.length;
@@ -627,6 +633,7 @@ function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
       rect.setAttribute("height", bh.toFixed(2));
       rect.setAttribute("fill", "#2c7fb8");
       rect.setAttribute("fill-opacity", "0.75");
+      addClickLabel(rect, `bin ${i + 1}: ${c.toFixed(2)}`);
       svgEl.appendChild(rect);
     });
     if (overlayCounts && overlayCounts.length) {
@@ -641,6 +648,7 @@ function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
         rect.setAttribute("height", bh.toFixed(2));
         rect.setAttribute("fill", "#f2c400");
         rect.setAttribute("fill-opacity", "0.6");
+        addClickLabel(rect, `opacity bin ${i + 1}: ${c.toFixed(2)}`);
         svgEl.appendChild(rect);
       });
     }
@@ -657,6 +665,7 @@ function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
       rect.setAttribute("height", Math.max(1, barH - 1).toFixed(2));
       rect.setAttribute("fill", "#2c7fb8");
       rect.setAttribute("fill-opacity", "0.75");
+      addClickLabel(rect, `bin ${i + 1}: ${c.toFixed(2)}`);
       svgEl.appendChild(rect);
     });
     if (overlayCounts && overlayCounts.length) {
@@ -670,6 +679,7 @@ function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
         rect.setAttribute("height", Math.max(1, barH - 5).toFixed(2));
         rect.setAttribute("fill", "#f2c400");
         rect.setAttribute("fill-opacity", "0.6");
+        addClickLabel(rect, `opacity bin ${i + 1}: ${c.toFixed(2)}`);
         svgEl.appendChild(rect);
       });
     }
@@ -687,6 +697,28 @@ function opacityWeightForFeature(f) {
   if (denom <= 0) return 0;
   const t = (v - min) / denom;
   return Math.max(0, Math.min(1, t));
+}
+
+function showHistogramTooltip(text, evt) {
+  const mapWrap = document.getElementById("map-wrap");
+  if (!mapWrap) return;
+  let tip = document.getElementById("histogramTooltip");
+  if (!tip) {
+    tip = document.createElement("div");
+    tip.id = "histogramTooltip";
+    mapWrap.appendChild(tip);
+  }
+  tip.textContent = text;
+  const rect = mapWrap.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const y = evt.clientY - rect.top;
+  tip.style.left = `${x}px`;
+  tip.style.top = `${y}px`;
+  tip.style.display = "block";
+  clearTimeout(tip._hideTimer);
+  tip._hideTimer = setTimeout(() => {
+    tip.style.display = "none";
+  }, 1200);
 }
 
 function addAxisCountLabels(svgEl, w, h, maxCount, axis) {

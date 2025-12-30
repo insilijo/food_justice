@@ -22,6 +22,7 @@ What it does per metro:
 import argparse
 import json
 import time
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -592,9 +593,22 @@ def aggregate_subdivisions(gdf_sub: gpd.GeoDataFrame, gdf_orig: gpd.GeoDataFrame
 
 # ---------------- Metro boundary ----------------
 
-def metro_boundary_from_places(place_names: list[str]) -> gpd.GeoDataFrame:
+def _place_slug(place_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", place_name.lower()).strip("_")
+    return slug or "place"
+
+def _load_place_polygon(place_name: str, place_dir: Path | None) -> gpd.GeoDataFrame:
+    if place_dir:
+        place_path = place_dir / f"{_place_slug(place_name)}.geojson"
+        if place_path.exists():
+            info(f"Loading cached place polygon for {place_name} from {place_path}")
+            return gpd.read_file(place_path).to_crs(4326)
+    info(f"Geocoding place polygon for {place_name}...")
+    return ox.geocode_to_gdf(place_name).to_crs(4326)
+
+def metro_boundary_from_places(place_names: list[str], place_dir: Path | None = None) -> gpd.GeoDataFrame:
     info(f"Geocoding {len(place_names)} place polygons for metro boundary...")
-    gdfs = [ox.geocode_to_gdf(p).to_crs(4326) for p in place_names]
+    gdfs = [_load_place_polygon(p, place_dir) for p in place_names]
     geom = unary_union([g.geometry.values[0] for g in gdfs])
     return gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[geom], crs="EPSG:4326")
 
@@ -634,7 +648,8 @@ def build_one_metro(
     )
 
     # 1) Metro boundary
-    metro_gdf = metro_boundary_from_places(meta["places"])
+    place_dir = out_dir / "places"
+    metro_gdf = metro_boundary_from_places(meta["places"], place_dir=place_dir)
     metro_poly_4326 = metro_gdf.geometry.values[0]
     metro_gdf.to_file(out_dir / "metro_boundary.geojson", driver="GeoJSON")
     info("Metro boundary saved.")
