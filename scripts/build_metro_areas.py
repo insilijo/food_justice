@@ -604,11 +604,21 @@ def _load_place_polygon(place_name: str, place_dir: Path | None) -> gpd.GeoDataF
             info(f"Loading cached place polygon for {place_name} from {place_path}")
             return gpd.read_file(place_path).to_crs(4326)
     info(f"Geocoding place polygon for {place_name}...")
-    return ox.geocode_to_gdf(place_name).to_crs(4326)
+    gdf = ox.geocode_to_gdf(place_name).to_crs(4326)
+    if place_dir:
+        place_path = place_dir / f"{_place_slug(place_name)}.geojson"
+        try:
+            gdf.to_file(place_path, driver="GeoJSON")
+        except Exception:
+            pass
+    return gdf
+
+def load_place_polygons(place_names: list[str], place_dir: Path | None = None) -> list[gpd.GeoDataFrame]:
+    info(f"Geocoding {len(place_names)} place polygons for metro boundary...")
+    return [_load_place_polygon(p, place_dir) for p in place_names]
 
 def metro_boundary_from_places(place_names: list[str], place_dir: Path | None = None) -> gpd.GeoDataFrame:
-    info(f"Geocoding {len(place_names)} place polygons for metro boundary...")
-    gdfs = [_load_place_polygon(p, place_dir) for p in place_names]
+    gdfs = load_place_polygons(place_names, place_dir=place_dir)
     geom = unary_union([g.geometry.values[0] for g in gdfs])
     return gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[geom], crs="EPSG:4326")
 
@@ -630,6 +640,7 @@ def build_one_metro(
     minutes_list: list[int],
     max_seeds: int,
     osm_buffer_km: float,
+    walk_filter: str | None,
     kde_smooth_enabled: bool,
     tract_subdivide_m: float,
     metro_grid_m: float,
@@ -647,6 +658,7 @@ def build_one_metro(
         "Settings: "
         f"max_seeds={max_seeds}, "
         f"osm_buffer_km={osm_buffer_km}, "
+        f"walk_filter={'custom' if walk_filter else 'default'}, "
         f"kde={kde_smooth_enabled}, "
         f"tract_subdivide_m={tract_subdivide_m}, "
         f"metro_grid_m={metro_grid_m}"
@@ -654,8 +666,11 @@ def build_one_metro(
 
     # 1) Metro boundary
     place_dir = out_dir / "places"
-    metro_gdf = metro_boundary_from_places(meta["places"], place_dir=place_dir)
-    metro_poly_4326 = metro_gdf.geometry.values[0]
+    place_dir.mkdir(parents=True, exist_ok=True)
+    place_gdfs = load_place_polygons(meta["places"], place_dir=place_dir)
+    metro_geom_union = unary_union([g.geometry.values[0] for g in place_gdfs])
+    metro_gdf = gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[metro_geom_union], crs="EPSG:4326")
+    metro_poly_4326 = metro_geom_union
     metro_gdf.to_file(out_dir / "metro_boundary.geojson", driver="GeoJSON")
     info("Metro boundary saved.")
 
@@ -665,8 +680,26 @@ def build_one_metro(
     if buffer_km > 0:
         info(f"Using OSM buffer: +{buffer_km:.1f} km for network + POI pulls.")
 
-    info("Downloading walking network from OSM...")
-    G = ox.graph_from_polygon(osm_poly_4326, network_type="walk", simplify=True)
+    info("Downloading walking network from OSM (chunked by place)...")
+    graph_kwargs = {
+        "network_type": "walk",
+        "simplify": True,
+        "retain_all": False,
+        "truncate_by_edge": True,
+    }
+    if walk_filter:
+        graph_kwargs["custom_filter"] = walk_filter
+    graphs = []
+    for idx, place_gdf in enumerate(place_gdfs, start=1):
+        place_poly = place_gdf.geometry.values[0]
+        place_poly = buffer_polygon_km(place_poly, buffer_km)
+        info(f"Downloading walking network chunk {idx}/{len(place_gdfs)} from OSM...")
+        graphs.append(ox.graph_from_polygon(place_poly, **graph_kwargs))
+    if not graphs:
+        raise ValueError("No place polygons available for OSM network download.")
+    G = graphs[0]
+    for g in graphs[1:]:
+        G = nx.compose(G, g)
     G = ox.project_graph(G)
     G = add_travel_time(G)
     crs_proj = G.graph["crs"]
@@ -1229,6 +1262,11 @@ def main():
     ap.add_argument("--minutes", default="10,15,20", help="Comma-separated minutes thresholds")
     ap.add_argument("--max-seeds", type=int, default=800, help="Max seed nodes for isochrone unions (0 = no cap)")
     ap.add_argument("--osm-buffer-km", type=float, default=None, help="Expand OSM network + POI queries by km beyond metro boundary")
+    ap.add_argument(
+        "--walk-filter",
+        default=None,
+        help="Optional Overpass QL custom filter for walking network (overrides default).",
+    )
     ap.add_argument("--kde", action="store_true", help="KDE smooth coverage using minutes as bandwidth (meters)")
     ap.add_argument("--tract-subdivide-m", type=float, default=0, help="Subdivide tracts into grid cells (meters)")
     ap.add_argument("--metro-grid-m", type=float, default=0, help="Build a metro-wide grid (meters)")
@@ -1245,6 +1283,7 @@ def main():
             if args.osm_buffer_km is not None
             else float(meta.get("osm_buffer_km", 0) or 0)
         )
+        walk_filter = meta.get("walk_filter", args.walk_filter)
         kde_enabled = bool(meta.get("kde", args.kde))
         tract_subdivide_m = float(meta.get("tract_subdivide_m", args.tract_subdivide_m) or 0)
         max_seeds = int(meta.get("max_seeds", args.max_seeds))
@@ -1259,6 +1298,7 @@ def main():
             minutes_list,
             max_seeds,
             osm_buffer_km,
+            walk_filter,
             kde_enabled,
             tract_subdivide_m,
             metro_grid_m,
