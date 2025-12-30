@@ -81,7 +81,11 @@
       <button id="downloadBtn" title="Download summary CSV for the current metro">Download CSV</button>
     </details>
   </div>
-  <div id="map"></div>
+  <div id="map-wrap">
+    <div id="map"></div>
+    <svg id="metricDistX" class="axis-hist axis-hist-x" viewBox="0 0 300 70" role="img" aria-label="Feature density along x axis"></svg>
+    <svg id="metricDistY" class="axis-hist axis-hist-y" viewBox="0 0 70 300" role="img" aria-label="Feature density along y axis"></svg>
+  </div>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="static/app.js"></script>
 </body>

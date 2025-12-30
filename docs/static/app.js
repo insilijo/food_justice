@@ -169,6 +169,9 @@ function loadMetro(slug) {
     map = L.map("map").setView(meta.center, meta.zoom + 1);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
     layerControl = L.control.layers(null, {}).addTo(map);
+    map.on("moveend zoomend", () => {
+      if (state.currentData) updateDistributions(state.currentData);
+    });
   } else {
     map.setView(meta.center, meta.zoom + 1);
   }
@@ -422,6 +425,7 @@ function loadLayer() {
       state.opacityRange = layerRangeOpacity(data, state.opacityMetric);
       seedMidStopFromMedian();
       updateColorRangeLabels();
+      updateDistributions(data);
       currentLayer = L.geoJSON(data, {
         style: styleForFeature,
         onEachFeature: (f, l) => {
@@ -448,6 +452,7 @@ function updateLayerStyle() {
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
   updateFoodBankLayer(state.currentData);
+  updateDistributions(state.currentData);
 }
 
 function styleForFeature(f) {
@@ -506,6 +511,202 @@ function parseMetricValue(val) {
   }
   const num = Number(val);
   return Number.isFinite(num) ? num : NaN;
+}
+
+function updateDistributions(data) {
+  const metricSvgX = document.getElementById("metricDistX");
+  const metricSvgY = document.getElementById("metricDistY");
+  if (!metricSvgX || !metricSvgY || !map || !data) return;
+  const bounds = map.getBounds();
+  const binsX = axisBins("x");
+  const binsY = axisBins("y");
+  const countsX = buildAxisCounts(data, bounds, "x", binsX);
+  const countsY = buildAxisCounts(data, bounds, "y", binsY);
+  let opacityCountsX = [];
+  let opacityCountsY = [];
+  if (state.opacityMetric && state.opacityMetric !== "none") {
+    opacityCountsX = buildAxisCounts(data, bounds, "x", binsX, opacityWeightForFeature);
+    opacityCountsY = buildAxisCounts(data, bounds, "y", binsY, opacityWeightForFeature);
+  }
+  const xSize = getSvgSize(metricSvgX, 300, 70);
+  const ySize = getSvgSize(metricSvgY, 70, 300);
+  renderAxisHistogram(metricSvgX, countsX, opacityCountsX, "x", xSize);
+  renderAxisHistogram(metricSvgY, countsY, opacityCountsY, "y", ySize);
+}
+
+function axisBins(axis) {
+  const zoom = map ? map.getZoom() : 0;
+  const base = Math.round(6 + zoom * 2);
+  const minBins = 8;
+  const maxBins = axis === "x" ? 48 : 48;
+  return Math.max(minBins, Math.min(maxBins, base));
+}
+
+function buildAxisCounts(data, bounds, axis, bins, weightFn) {
+  const counts = new Array(bins).fill(0);
+  const minX = bounds.getWest();
+  const maxX = bounds.getEast();
+  const minY = bounds.getSouth();
+  const maxY = bounds.getNorth();
+  const denomX = maxX - minX || 1;
+  const denomY = maxY - minY || 1;
+  data.features.forEach(f => {
+    const center = featureCenterCoords(f);
+    if (!center) return;
+    const lng = center[0];
+    const lat = center[1];
+    if (lng < minX || lng > maxX || lat < minY || lat > maxY) return;
+    const t = axis === "x"
+      ? (lng - minX) / denomX
+      : (lat - minY) / denomY;
+    const idx = Math.max(0, Math.min(bins - 1, Math.floor(t * bins)));
+    const w = weightFn ? weightFn(f) : 1;
+    if (w > 0) counts[idx] += w;
+  });
+  return counts;
+}
+
+function featureCenterCoords(feature) {
+  const geom = feature?.geometry;
+  if (!geom) return null;
+  if (geom.type === "Point" && Array.isArray(geom.coordinates)) {
+    return geom.coordinates;
+  }
+  const bounds = {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity
+  };
+  walkCoords(geom.coordinates, bounds);
+  if (!isFinite(bounds.minX) || !isFinite(bounds.minY)) return null;
+  return [(bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2];
+}
+
+function walkCoords(coords, bounds) {
+  if (!Array.isArray(coords)) return;
+  if (typeof coords[0] === "number") {
+    const x = coords[0];
+    const y = coords[1];
+    if (typeof x !== "number" || typeof y !== "number") return;
+    bounds.minX = Math.min(bounds.minX, x);
+    bounds.maxX = Math.max(bounds.maxX, x);
+    bounds.minY = Math.min(bounds.minY, y);
+    bounds.maxY = Math.max(bounds.maxY, y);
+    return;
+  }
+  coords.forEach(c => walkCoords(c, bounds));
+}
+
+function getSvgSize(svgEl, fallbackW, fallbackH) {
+  const rect = svgEl.getBoundingClientRect();
+  const w = rect.width || fallbackW;
+  const h = rect.height || fallbackH;
+  return { w, h };
+}
+
+function renderAxisHistogram(svgEl, counts, overlayCounts, axis, size) {
+  const w = size?.w ?? (axis === "x" ? 300 : 70);
+  const h = size?.h ?? (axis === "x" ? 70 : 300);
+  svgEl.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+  if (!counts.length) return;
+  const maxOverlay = overlayCounts && overlayCounts.length ? Math.max(...overlayCounts) : 0;
+  const maxCount = Math.max(...counts, maxOverlay, 1);
+
+  if (axis === "x") {
+    const barW = w / counts.length;
+    counts.forEach((c, i) => {
+      const bh = (c / maxCount) * (h - 16);
+      const x = i * barW;
+      const y = h - bh;
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x.toFixed(2));
+      rect.setAttribute("y", y.toFixed(2));
+      rect.setAttribute("width", Math.max(1, barW - 1).toFixed(2));
+      rect.setAttribute("height", bh.toFixed(2));
+      rect.setAttribute("fill", "#2c7fb8");
+      rect.setAttribute("fill-opacity", "0.75");
+      svgEl.appendChild(rect);
+    });
+    if (overlayCounts && overlayCounts.length) {
+      overlayCounts.forEach((c, i) => {
+        const bh = (c / maxCount) * (h - 16);
+        const x = i * barW + 2;
+        const y = h - bh;
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", x.toFixed(2));
+        rect.setAttribute("y", y.toFixed(2));
+        rect.setAttribute("width", Math.max(1, barW - 5).toFixed(2));
+        rect.setAttribute("height", bh.toFixed(2));
+        rect.setAttribute("fill", "#f2c400");
+        rect.setAttribute("fill-opacity", "0.6");
+        svgEl.appendChild(rect);
+      });
+    }
+    addAxisCountLabels(svgEl, w, h, maxCount, "x");
+  } else {
+    const barH = h / counts.length;
+    counts.forEach((c, i) => {
+      const bw = (c / maxCount) * (w - 16);
+      const y = h - (i + 1) * barH;
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", "0");
+      rect.setAttribute("y", y.toFixed(2));
+      rect.setAttribute("width", bw.toFixed(2));
+      rect.setAttribute("height", Math.max(1, barH - 1).toFixed(2));
+      rect.setAttribute("fill", "#2c7fb8");
+      rect.setAttribute("fill-opacity", "0.75");
+      svgEl.appendChild(rect);
+    });
+    if (overlayCounts && overlayCounts.length) {
+      overlayCounts.forEach((c, i) => {
+        const bw = (c / maxCount) * (w - 16);
+        const y = h - (i + 1) * barH + 2;
+        const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        rect.setAttribute("x", "0");
+        rect.setAttribute("y", y.toFixed(2));
+        rect.setAttribute("width", Math.max(1, bw - 3).toFixed(2));
+        rect.setAttribute("height", Math.max(1, barH - 5).toFixed(2));
+        rect.setAttribute("fill", "#f2c400");
+        rect.setAttribute("fill-opacity", "0.6");
+        svgEl.appendChild(rect);
+      });
+    }
+    addAxisCountLabels(svgEl, w, h, maxCount, "y");
+  }
+}
+
+function opacityWeightForFeature(f) {
+  if (!state.opacityMetric || state.opacityMetric === "none") return 0;
+  const v = parseMetricValue(f?.properties?.[state.opacityMetric]);
+  if (isNaN(v)) return 0;
+  const min = state.opacityRange?.min ?? 0;
+  const max = state.opacityRange?.max ?? 1;
+  const denom = max - min;
+  if (denom <= 0) return 0;
+  const t = (v - min) / denom;
+  return Math.max(0, Math.min(1, t));
+}
+
+function addAxisCountLabels(svgEl, w, h, maxCount, axis) {
+  const makeText = (x, y, text, anchor = "start") => {
+    const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    label.setAttribute("x", String(x));
+    label.setAttribute("y", String(y));
+    label.setAttribute("font-size", "9");
+    label.setAttribute("fill", "#555");
+    label.setAttribute("text-anchor", anchor);
+    label.textContent = text;
+    svgEl.appendChild(label);
+  };
+  if (axis === "x") {
+    makeText(2, 10, "0");
+    makeText(2, 20, String(maxCount));
+  } else {
+    makeText(4, h - 4, "0");
+    makeText(4, 10, String(maxCount));
+  }
 }
 
 function syncOpacityMetric() {
