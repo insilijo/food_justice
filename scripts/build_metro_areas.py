@@ -42,7 +42,7 @@ GTFS_START_TIME = 17 * 3600
 GTFS_END_TIME = 19 * 3600
 GTFS_TRANSFER_PENALTY_MIN = 10.0
 GTFS_MIN_EDGE_SEC = 120.0
-FOODBANK_MAX = 10
+FOODBANK_MAX = 5
 FOODBANK_CANDIDATE_CAP = 300
 
 # ---------------- Logging ----------------
@@ -633,9 +633,14 @@ def build_one_metro(
     kde_smooth_enabled: bool,
     tract_subdivide_m: float,
     metro_grid_m: float,
+    skip_existing: bool,
 ) -> None:
     out_dir = Path(out_root) / slug
     out_dir.mkdir(parents=True, exist_ok=True)
+    breaks_path = out_dir / "breaks.json"
+    if skip_existing and breaks_path.exists():
+        info(f"Skipping {slug}: existing outputs found at {breaks_path}")
+        return
 
     info(f"=== Metro: {slug} ===")
     info(
@@ -1227,6 +1232,8 @@ def main():
     ap.add_argument("--kde", action="store_true", help="KDE smooth coverage using minutes as bandwidth (meters)")
     ap.add_argument("--tract-subdivide-m", type=float, default=0, help="Subdivide tracts into grid cells (meters)")
     ap.add_argument("--metro-grid-m", type=float, default=0, help="Build a metro-wide grid (meters)")
+    ap.add_argument("--no-skip-existing", action="store_true", help="Do not skip metros with existing outputs")
+    ap.add_argument("--force", action="store_true", help="Rebuild metros even if outputs exist")
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
@@ -1255,6 +1262,7 @@ def main():
             kde_enabled,
             tract_subdivide_m,
             metro_grid_m,
+            skip_existing=bool((not args.no_skip_existing) and (not args.force)),
         )
 
 if __name__ == "__main__":

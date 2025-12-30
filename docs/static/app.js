@@ -1,7 +1,7 @@
 // Food Access Explorer (static Leaflet app) with data-driven color breaks
 
 let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl, groceryLayer, stationLayer, busLayer, foodBankLayer;
-const FOOD_BANK_MAX = 10;
+const FOOD_BANK_MAX = 5;
 let state = {
   metro: null,
   geo: null,
