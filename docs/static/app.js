@@ -759,9 +759,10 @@ function layerRangeOpacity(data, metric) {
   vals.sort((a, b) => a - b);
   const mid = Math.floor(vals.length / 2);
   const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-  const min = vals[0];
+  const p05 = vals[Math.floor(0.05 * (vals.length - 1))];
   const p95 = vals[Math.floor(0.95 * (vals.length - 1))];
-  const max = p95 > 0 ? p95 : vals[vals.length - 1];
+  const min = p05;
+  const max = p95 > min ? p95 : vals[vals.length - 1];
   return { min, max, median };
 }
 
