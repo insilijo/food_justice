@@ -1,3 +1,4 @@
 # Large data files are kept out of git history.
+*.geojson filter=lfs diff=lfs merge=lfs -text
 docs/data/** filter=lfs diff=lfs merge=lfs -text
 data_inputs/*.gpkg filter=lfs diff=lfs merge=lfs -text
