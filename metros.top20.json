@@ -15,6 +15,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 0,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -35,6 +36,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 0,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -55,6 +57,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 5,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -75,6 +78,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 2,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -95,6 +99,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 2,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -115,6 +120,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -135,6 +141,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -155,6 +162,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 5,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -175,6 +183,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 5,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -195,6 +204,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 2,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -215,6 +225,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -235,6 +246,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -255,6 +267,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -275,6 +288,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -295,6 +309,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -315,6 +330,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -335,6 +351,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -355,6 +372,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -375,6 +393,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
@@ -395,6 +414,7 @@
         "tract_id": "GEOID"
       },
       "osm_buffer_km": 10,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
