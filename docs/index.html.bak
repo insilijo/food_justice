@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta name="data-base-url" content="https://food-justice.8ef6f4ab97ccb098d23f9d5ab70a6530.r2.dev">
+  <meta name="data-base-url" content="">
   <title>Food Access Explorer</title>
   <link rel="stylesheet" href="static/app.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">

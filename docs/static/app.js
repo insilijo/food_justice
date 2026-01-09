@@ -2,6 +2,12 @@
 
 let map, manifest, currentLayer, boundaryLayer, usdaLayer, layerControl, groceryLayer, stationLayer, busLayer, foodBankLayer;
 const FOOD_BANK_MAX = 5;
+const metaBase = document.querySelector('meta[name="data-base-url"]')?.content || "";
+const DATA_BASE_URL = (window.DATA_BASE_URL || metaBase).replace(/\/$/, "");
+function dataUrl(path) {
+  if (!DATA_BASE_URL) return path;
+  return `${DATA_BASE_URL}/${path.replace(/^\//, "")}`;
+}
 let state = {
   metro: null,
   geo: null,
@@ -30,7 +36,7 @@ let state = {
   }
 };
 
-fetch("data/manifest.json")
+fetch(dataUrl("data/manifest.json"))
   .then(r => r.json())
   .then(m => { manifest = m; initUI(); });
 
@@ -291,7 +297,7 @@ function loadBoundary(meta) {
   }
   if (!meta.has_boundary) return;
 
-  fetch(`data/${state.metro}/metro_boundary.geojson`)
+  fetch(dataUrl(`data/${state.metro}/metro_boundary.geojson`))
     .then(r => r.json())
     .then(d => {
       boundaryLayer = L.geoJSON(d, {
@@ -309,7 +315,7 @@ function loadUSDA(meta) {
   }
   if (!meta.has_usda) return;
 
-  fetch(`data/${state.metro}/usda_fara_tracts.geojson`)
+  fetch(dataUrl(`data/${state.metro}/usda_fara_tracts.geojson`))
     .then(r => r.json())
     .then(d => {
       usdaLayer = L.geoJSON(d, { style: { color: "#555", weight: 1, fillOpacity: 0 } });
@@ -336,7 +342,7 @@ function togglePOILayers() {
   }
 
   if (state.showGroceries && !groceryLayer) {
-    fetch(`data/${state.metro}/groceries.geojson`)
+    fetch(dataUrl(`data/${state.metro}/groceries.geojson`))
       .then(r => r.json())
       .then(d => {
         const groceryIcon = L.divIcon({
@@ -352,7 +358,7 @@ function togglePOILayers() {
       });
   }
   if ((state.showStations || state.showBusStops) && (!stationLayer || !busLayer)) {
-    fetch(`data/${state.metro}/transit.geojson`)
+    fetch(dataUrl(`data/${state.metro}/transit.geojson`))
       .then(r => r.json())
       .then(d => {
         const trainIcon = L.divIcon({
@@ -421,7 +427,7 @@ function loadLayer() {
   }
 
   const meta = manifest.metros[state.metro];
-  const path = `data/${state.metro}/${state.geo}_${state.mode}_${state.minutes}.geojson`;
+  const path = dataUrl(`data/${state.metro}/${state.geo}_${state.mode}_${state.minutes}.geojson`);
   fetch(path)
     .then(r => r.json())
     .then(data => {
@@ -817,7 +823,7 @@ function updateFoodBankLayer(data) {
   if (!layerData || !map || state.foodBankCount <= 0) return;
   const count = Math.min(state.foodBankCount, FOOD_BANK_MAX);
   const modeKey = state.mode === "walk" ? "walk" : "walk_transit";
-  const fbPath = `data/${state.metro}/foodbanks_${modeKey}.geojson`;
+  const fbPath = dataUrl(`data/${state.metro}/foodbanks_${modeKey}.geojson`);
 
   fetch(fbPath)
     .then(r => r.ok ? r.json() : null)
@@ -981,5 +987,5 @@ function lerp3(a, b, c, t, t0, t1, t2) {
 }
 
 document.getElementById("downloadBtn").onclick = () => {
-  window.open(`data/${state.metro}/${state.geo}_summary.csv`);
+  window.open(dataUrl(`data/${state.metro}/${state.geo}_summary.csv`));
 };
