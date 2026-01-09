@@ -7,13 +7,13 @@ let state = {
   geo: null,
   mode: null,
   minutes: null,
-  timeMode: "fixed",
-  fillOpacity: 0.7,
-  strokeOpacity: 0.6,
+  timeMode: "min_access",
+  fillOpacity: 1,
+  strokeOpacity: 0,
   range: { min: 0, max: 1 },
   opacityRange: { min: 0, max: 1 },
   metric: "coverage_pct",
-  opacityMetric: "none",
+  opacityMetric: "POPULATION",
   minAccessKey: "min_transit_minutes",
   foodBankCount: 0,
   currentData: null,
@@ -48,8 +48,9 @@ function initUI() {
   const colorHighValue = document.getElementById("colorHighValue");
   const metricSelect = document.getElementById("metricSelect");
   const opacityMetricSelect = document.getElementById("opacityMetricSelect");
-  const foodBankCount = document.getElementById("foodBankCount");
   const foodBankValue = document.getElementById("foodBankValue");
+  const foodBankMinus = document.getElementById("foodBankMinus");
+  const foodBankPlus = document.getElementById("foodBankPlus");
   const timeModeSelect = document.getElementById("timeModeSelect");
   const groceryToggle = document.getElementById("groceryToggle");
   const stationToggle = document.getElementById("stationToggle");
@@ -100,15 +101,19 @@ function initUI() {
     state.opacityMetric = e.target.value;
     updateLayerStyle();
   };
-  if (foodBankCount) {
+  if (foodBankMinus && foodBankPlus) {
     const updateFoodBankLabel = () => {
       if (foodBankValue) foodBankValue.textContent = String(state.foodBankCount);
     };
-    foodBankCount.oninput = e => {
-      state.foodBankCount = Number(e.target.value);
+    const adjustFoodBanks = delta => {
+      const next = Math.max(0, Math.min(FOOD_BANK_MAX, state.foodBankCount + delta));
+      if (next === state.foodBankCount) return;
+      state.foodBankCount = next;
       updateFoodBankLabel();
       updateLayerStyle();
     };
+    foodBankMinus.onclick = () => adjustFoodBanks(-1);
+    foodBankPlus.onclick = () => adjustFoodBanks(1);
     updateFoodBankLabel();
   }
   groceryToggle.onchange = e => {
@@ -152,6 +157,7 @@ function initUI() {
     o.textContent = opt.label;
     timeModeSelect.appendChild(o);
   });
+  timeModeSelect.value = state.timeMode;
   timeModeSelect.onchange = e => {
     state.timeMode = e.target.value;
     updateMetricOptions();
@@ -199,6 +205,9 @@ function populate(id, values, cb) {
   let initial = values[0];
   if (id === "geoSelect" && values.includes("metro_grid")) {
     initial = "metro_grid";
+  }
+  if (id === "modeSelect" && values.includes("walk")) {
+    initial = "walk";
   }
   el.value = initial;
   cb(initial);
@@ -429,12 +438,7 @@ function loadLayer() {
       currentLayer = L.geoJSON(data, {
         style: styleForFeature,
         onEachFeature: (f, l) => {
-          l.bindPopup(
-            `<b>ID:</b> ${f.properties.GEOID}<br>
-             <b>Population:</b> ${Math.round(f.properties.POPULATION)}<br>
-             <b>Access:</b> ${(Number(f.properties.coverage_pct)*100).toFixed(1)}%<br>
-             <b>Metric:</b> ${formatMetric(f.properties, metricKey())}`
-          );
+          l.bindPopup(popupHtml(f.properties));
         }
       }).addTo(map);
       layerControl.addOverlay(currentLayer, "Food access layer");
@@ -451,6 +455,7 @@ function updateLayerStyle() {
   state.opacityRange = layerRangeOpacity(state.currentData, state.opacityMetric);
   updateColorRangeLabels();
   currentLayer.setStyle(styleForFeature);
+  refreshPopups();
   updateFoodBankLayer(state.currentData);
   updateDistributions(state.currentData);
 }
@@ -499,6 +504,25 @@ function featureOpacity(f) {
   const t = (v - min) / denom;
   const pct = Math.max(0, Math.min(1, t));
   return state.fillOpacity * pct;
+}
+
+function popupHtml(props) {
+  const geoid = props?.GEOID ?? "n/a";
+  const pop = Math.round(Number(props?.POPULATION ?? 0));
+  const access = Number(props?.coverage_pct ?? 0);
+  return `<b>ID:</b> ${geoid}<br>
+          <b>Population:</b> ${pop}<br>
+          <b>Access:</b> ${(access * 100).toFixed(1)}%<br>
+          <b>Metric:</b> ${formatMetric(props, metricKey())}`;
+}
+
+function refreshPopups() {
+  if (!currentLayer) return;
+  currentLayer.eachLayer(layer => {
+    const props = layer?.feature?.properties;
+    if (!props || !layer.getPopup()) return;
+    layer.setPopupContent(popupHtml(props));
+  });
 }
 
 function parseMetricValue(val) {

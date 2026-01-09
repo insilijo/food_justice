@@ -41,10 +41,25 @@ label.control-group span {
   font-size: 11px;
   color: #333;
 }
-.control-group #foodBankValue {
+.foodbank-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+}
+.foodbank-controls button {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+.foodbank-controls #foodBankValue {
   display: inline-block;
-  margin-left: 6px;
+  min-width: 20px;
+  text-align: center;
   font-weight: 600;
+  margin: 0;
 }
 .foodbank-star {
   color: #f2c400;
