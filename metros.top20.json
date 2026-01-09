@@ -231,27 +231,6 @@
       "metro_grid_m": 250,
       "max_seeds": 300
     },
-    "riverside_san_bernardino_ca": {
-      "name": "Riverside\u2013San Bernardino\u2013Ontario, CA MSA",
-      "places": [
-        "Riverside, CA, USA",
-        "San Bernardino, CA, USA",
-        "Ontario, CA, USA"
-      ],
-      "zoom": 10,
-      "boundaries": {
-        "zcta_path": "data_inputs/zcta_us.gpkg",
-        "zcta_id": "ZCTA5CE10",
-        "tract_path": "data_inputs/tracts_us.gpkg",
-        "tract_id": "GEOID"
-      },
-      "osm_buffer_km": 10,
-      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
-      "kde": false,
-      "tract_subdivide_m": 250,
-      "metro_grid_m": 250,
-      "max_seeds": 300
-    },
     "san_francisco_bay_ca": {
       "name": "San Francisco\u2013Oakland\u2013Fremont, CA MSA",
       "places": [
@@ -371,12 +350,12 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 0.5,
       "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
-      "max_seeds": 300
+      "max_seeds": 150
     },
     "denver_co": {
       "name": "Denver\u2013Aurora\u2013Centennial, CO MSA",
@@ -392,12 +371,12 @@
         "tract_path": "data_inputs/tracts_us.gpkg",
         "tract_id": "GEOID"
       },
-      "osm_buffer_km": 10,
+      "osm_buffer_km": 0.5,
       "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
       "kde": false,
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
-      "max_seeds": 300
+      "max_seeds": 150
     },
     "orlando_fl": {
       "name": "Orlando\u2013Kissimmee\u2013Sanford, FL MSA",
