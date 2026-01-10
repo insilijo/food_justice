@@ -119,9 +119,26 @@ def get_osm_transit(poly_4326):
 # ---------------- Census API ----------------
 
 def census_get(url: str):
-    r = requests.get(url, timeout=60)
-    r.raise_for_status()
-    return r.json()
+    backoff = 2
+    for attempt in range(5):
+        try:
+            r = requests.get(url, timeout=60)
+            r.raise_for_status()
+            try:
+                return r.json()
+            except ValueError:
+                if attempt < 4:
+                    warn("Census API returned non-JSON; retrying...")
+                    time.sleep(backoff ** attempt)
+                    continue
+                snippet = (r.text or "").strip().replace("\n", " ")[:200]
+                raise ValueError(f"Census API non-JSON response: {snippet!r}")
+        except requests.RequestException as exc:
+            if attempt < 4:
+                warn(f"Census API request failed ({exc}); retrying...")
+                time.sleep(backoff ** attempt)
+                continue
+            raise
 
 def parse_hhmmss_to_seconds(val: str) -> float | None:
     if not isinstance(val, str) or ":" not in val:
