@@ -444,6 +444,27 @@
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
       "max_seeds": 300
+    },
+    "columbus_dublin_oh": {
+      "name": "Columbus-Dublin, OH MSA",
+      "places": [
+        "Columbus, OH, USA",
+        "Dublin, OH, USA"
+      ],
+      "zoom": 10,
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      },
+      "osm_buffer_km": 2,
+      "walk_tile_km": 20,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     }
   }
 }
