@@ -398,6 +398,52 @@
       "tract_subdivide_m": 250,
       "metro_grid_m": 250,
       "max_seeds": 300
+    },
+    "raleigh_durham_nc": {
+      "name": "Raleigh-Durham-Cary-Morrisville-Chapel Hill, NC MSA",
+      "places": [
+        "Raleigh, NC, USA",
+        "Durham, NC, USA",
+        "Cary, NC, USA",
+        "Morrisville, NC, USA",
+        "Chapel Hill, NC, USA"
+      ],
+      "zoom": 10,
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      },
+      "osm_buffer_km": 10,
+      "walk_tile_km": 20,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
+    },
+    "austin_tx": {
+      "name": "Austin-Round Rock-San Marcos, TX MSA",
+      "places": [
+        "Austin, TX, USA",
+        "Round Rock, TX, USA",
+        "San Marcos, TX, USA"
+      ],
+      "zoom": 10,
+      "boundaries": {
+        "zcta_path": "data_inputs/zcta_us.gpkg",
+        "zcta_id": "ZCTA5CE10",
+        "tract_path": "data_inputs/tracts_us.gpkg",
+        "tract_id": "GEOID"
+      },
+      "osm_buffer_km": 2,
+      "walk_tile_km": 20,
+      "walk_filter": "[\"highway\"~\"footway|path|pedestrian|living_street|residential|tertiary|secondary|primary|trunk|unclassified|cycleway\"][\"service\"!~\"driveway|parking_aisle\"][\"highway\"!~\"steps|construction|track\"]",
+      "kde": false,
+      "tract_subdivide_m": 250,
+      "metro_grid_m": 250,
+      "max_seeds": 300
     }
   }
 }
