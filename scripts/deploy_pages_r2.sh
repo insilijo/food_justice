@@ -9,6 +9,7 @@ DATA_DIR="${DOCS_DIR}/data"
 STASH_DIR="${STASH_DIR:-data_cache/r2-data}"
 CREATE_BUCKET="${CREATE_BUCKET:-0}"
 UPDATE_DATA="${UPDATE_DATA:-0}"
+SKIP_EXISTING_PREFIXES="${SKIP_EXISTING_PREFIXES:-1}"
 
 if [[ "$UPDATE_DATA" == "1" ]]; then
   if [[ ! -d "$DATA_DIR" ]]; then
@@ -81,9 +82,51 @@ if [[ "$CREATE_BUCKET" == "1" ]]; then
   npx wrangler@latest r2 bucket create "$BUCKET_NAME" --remote
 fi
 
+prefix_exists() {
+  local prefix="$1"
+  local out
+  if ! out=$(npx wrangler@latest r2 object list "$BUCKET_NAME" --remote --prefix "$prefix" --limit 1 --format json 2>/dev/null); then
+    return 2
+  fi
+  python3 - <<'PY' <<<"$out"
+import json, sys
+s = sys.stdin.read().strip()
+if not s:
+    sys.exit(1)
+try:
+    data = json.loads(s)
+except json.JSONDecodeError:
+    sys.exit(2)
+if isinstance(data, dict):
+    objs = data.get("objects") or data.get("data") or data.get("result") or []
+else:
+    objs = data
+sys.exit(0 if objs else 1)
+PY
+}
+
 if [[ "$UPDATE_DATA" == "1" ]]; then
+  declare -A prefix_cache=()
   find "$DATA_DIR" -type f -print0 | while IFS= read -r -d '' f; do
     key="${f#${DOCS_DIR}/}"
+    if [[ "$SKIP_EXISTING_PREFIXES" == "1" ]] && [[ "$key" == data/* ]]; then
+      rest="${key#data/}"
+      top="${rest%%/*}"
+      if [[ "$rest" != "$top" ]]; then
+        prefix="data/${top}/"
+        if [[ -z "${prefix_cache[$prefix]+x}" ]]; then
+          if prefix_exists "$prefix"; then
+            prefix_cache[$prefix]=1
+            echo "Skipping existing prefix: $prefix"
+          else
+            prefix_cache[$prefix]=0
+          fi
+        fi
+        if [[ "${prefix_cache[$prefix]}" == "1" ]]; then
+          continue
+        fi
+      fi
+    fi
     npx wrangler@latest r2 object put "${BUCKET_NAME}/${key}" --file "$f" --remote
   done
   mv "$DATA_DIR" "$STASH_DIR"

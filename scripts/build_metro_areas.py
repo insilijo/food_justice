@@ -632,7 +632,10 @@ def buffer_polygon_km(poly_4326, buffer_km: float):
 def tile_polygon_km(poly_4326, tile_km: float):
     if not tile_km or tile_km <= 0:
         return [poly_4326]
-    poly_proj, crs_proj = ox.project_geometry(poly_4326)
+    try:
+        poly_proj, crs_proj = ox.project_geometry(poly_4326)
+    except AttributeError:
+        poly_proj, crs_proj = ox.projection.project_geometry(poly_4326)
     minx, miny, maxx, maxy = poly_proj.bounds
     tile_m = float(tile_km) * 1000.0
     transformer = Transformer.from_crs(crs_proj, CRS.from_epsg(4326), always_xy=True)
@@ -668,13 +671,15 @@ def build_one_metro(
     tract_subdivide_m: float,
     metro_grid_m: float,
     skip_existing: bool,
+    force_rerun: set[str],
 ) -> None:
     out_dir = Path(out_root) / slug
-    out_dir.mkdir(parents=True, exist_ok=True)
-    breaks_path = out_dir / "breaks.json"
-    if skip_existing and breaks_path.exists():
-        info(f"Skipping {slug}: existing outputs found at {breaks_path}")
+    if slug in force_rerun:
+        info(f"Forcing rerun for {slug}")
+    elif skip_existing and out_dir.exists() and any(out_dir.iterdir()):
+        info(f"Skipping {slug}: output directory already exists at {out_dir}")
         return
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     info(f"=== Metro: {slug} ===")
     info(
@@ -722,7 +727,11 @@ def build_one_metro(
     if tiles:
         for idx, tile in enumerate(tiles, start=1):
             info(f"Downloading walking network tile {idx}/{len(tiles)} from OSM...")
-            g = ox.graph_from_polygon(tile, **graph_kwargs)
+            try:
+                g = ox.graph_from_polygon(tile, **graph_kwargs)
+            except ValueError as exc:
+                warn(f"Skipping empty tile {idx}/{len(tiles)}: {exc}")
+                continue
             if len(g.nodes) and len(g.edges):
                 graphs.append(g)
     else:
@@ -1309,10 +1318,16 @@ def main():
     ap.add_argument("--metro-grid-m", type=float, default=0, help="Build a metro-wide grid (meters)")
     ap.add_argument("--no-skip-existing", action="store_true", help="Do not skip metros with existing outputs")
     ap.add_argument("--force", action="store_true", help="Rebuild metros even if outputs exist")
+    ap.add_argument(
+        "--force-rerun",
+        default="",
+        help="Comma-separated list of metro slugs to rerun even if outputs exist.",
+    )
     args = ap.parse_args()
 
     cfg = json.loads(Path(args.config).read_text())
     minutes_list = [int(x.strip()) for x in args.minutes.split(",") if x.strip()]
+    force_rerun = {x.strip() for x in args.force_rerun.split(",") if x.strip()}
 
     for slug, meta in cfg["metros"].items():
         osm_buffer_km = (
@@ -1346,6 +1361,7 @@ def main():
             tract_subdivide_m,
             metro_grid_m,
             skip_existing=bool((not args.no_skip_existing) and (not args.force)),
+            force_rerun=force_rerun,
         )
 
 if __name__ == "__main__":
