@@ -1,11 +1,17 @@
 export async function onRequest({ params, env }) {
+  if (!env?.DATA) {
+    return new Response("R2 binding DATA is not configured.", { status: 500 });
+  }
   const key = Array.isArray(params?.path)
     ? params.path.join("/")
     : params?.path || "";
   if (!key) {
     return new Response("Not found", { status: 404 });
   }
-  const obj = await env.DATA.get(key);
+  let obj = await env.DATA.get(key);
+  if (!obj && key.startsWith("data/")) {
+    obj = await env.DATA.get(key.slice(5));
+  }
   if (!obj) {
     return new Response("Not found", { status: 404 });
   }
