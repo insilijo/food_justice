@@ -12,6 +12,9 @@ export async function onRequest({ params, env }) {
   if (!obj && key.startsWith("data/")) {
     obj = await env.DATA.get(key.slice(5));
   }
+  if (!obj && !key.startsWith("data/")) {
+    obj = await env.DATA.get(`data/${key}`);
+  }
   if (!obj) {
     return new Response("Not found", { status: 404 });
   }
