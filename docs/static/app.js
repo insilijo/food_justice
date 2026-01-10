@@ -152,6 +152,7 @@ function initUI() {
   }
   metroSelect.value = first;
   loadMetro(first);
+  chooseNearestMetro(metros, metroSelect);
 
   timeModeSelect.innerHTML = "";
   [
@@ -171,6 +172,51 @@ function initUI() {
     updateLayerStyle();
     loadLayer();
   };
+}
+
+function chooseNearestMetro(metros, metroSelect) {
+  if (!navigator.geolocation) return;
+  const entries = Object.entries(metros);
+  if (!entries.length) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude } = pos.coords || {};
+      if (typeof latitude !== "number" || typeof longitude !== "number") return;
+      const nearest = nearestMetroSlug(entries, latitude, longitude);
+      if (nearest && nearest !== metroSelect.value) {
+        metroSelect.value = nearest;
+        loadMetro(nearest);
+      }
+    },
+    () => {},
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+  );
+}
+
+function nearestMetroSlug(entries, lat, lng) {
+  let best = null;
+  let bestDist = Infinity;
+  entries.forEach(([slug, meta]) => {
+    const center = meta?.center;
+    if (!Array.isArray(center) || center.length < 2) return;
+    const d = haversineKm(lat, lng, Number(center[0]), Number(center[1]));
+    if (!isNaN(d) && d < bestDist) {
+      bestDist = d;
+      best = slug;
+    }
+  });
+  return best;
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = v => (v * Math.PI) / 180;
+  const r = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * r * Math.asin(Math.sqrt(a));
 }
 
 function loadMetro(slug) {
