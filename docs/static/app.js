@@ -136,23 +136,32 @@ function initUI() {
   };
 
   const metroSelect = document.getElementById("metroSelect");
+  const metroOptions = document.getElementById("metroOptions");
   const metros = manifest.metros || {};
+  const metroIndex = buildMetroIndex(metros);
   Object.entries(metros).forEach(([slug, meta]) => {
+    if (!metroOptions) return;
     const opt = document.createElement("option");
-    opt.value = slug;
-    opt.textContent = meta.name;
-    metroSelect.appendChild(opt);
+    opt.value = meta.name;
+    opt.dataset.slug = slug;
+    metroOptions.appendChild(opt);
   });
-  metroSelect.onchange = e => loadMetro(e.target.value);
+  metroSelect.onchange = e => {
+    const slug = resolveMetroSlug(e.target.value, metroIndex);
+    if (slug) setMetroSelection(slug, metros, metroSelect);
+  };
+  metroSelect.onblur = e => {
+    const slug = resolveMetroSlug(e.target.value, metroIndex);
+    if (slug) setMetroSelection(slug, metros, metroSelect);
+  };
 
   const first = Object.keys(metros)[0];
   if (!first) {
     console.warn("No metros found in manifest.json");
     return;
   }
-  metroSelect.value = first;
-  loadMetro(first);
-  chooseNearestMetro(metros, metroSelect);
+  setMetroSelection(first, metros, metroSelect);
+  chooseNearestMetro(metros, metroSelect, metroIndex);
 
   timeModeSelect.innerHTML = "";
   [
@@ -174,7 +183,7 @@ function initUI() {
   };
 }
 
-function chooseNearestMetro(metros, metroSelect) {
+function chooseNearestMetro(metros, metroSelect, metroIndex) {
   if (!navigator.geolocation) return;
   const entries = Object.entries(metros);
   if (!entries.length) return;
@@ -183,9 +192,8 @@ function chooseNearestMetro(metros, metroSelect) {
       const { latitude, longitude } = pos.coords || {};
       if (typeof latitude !== "number" || typeof longitude !== "number") return;
       const nearest = nearestMetroSlug(entries, latitude, longitude);
-      if (nearest && nearest !== metroSelect.value) {
-        metroSelect.value = nearest;
-        loadMetro(nearest);
+      if (nearest && resolveMetroSlug(metroSelect.value, metroIndex) !== nearest) {
+        setMetroSelection(nearest, metros, metroSelect);
       }
     },
     () => {},
@@ -217,6 +225,39 @@ function haversineKm(lat1, lon1, lat2, lon2) {
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return 2 * r * Math.asin(Math.sqrt(a));
+}
+
+function buildMetroIndex(metros) {
+  const byName = {};
+  const bySlug = {};
+  Object.entries(metros).forEach(([slug, meta]) => {
+    if (meta?.name) {
+      byName[meta.name.toLowerCase()] = slug;
+    }
+    bySlug[slug.toLowerCase()] = slug;
+  });
+  return { byName, bySlug };
+}
+
+function resolveMetroSlug(value, index) {
+  if (!value) return null;
+  const key = String(value).trim().toLowerCase();
+  if (!key) return null;
+  if (index.bySlug[key]) return index.bySlug[key];
+  if (index.byName[key]) return index.byName[key];
+  return null;
+}
+
+function setMetroSelection(slug, metros, metroSelect) {
+  const meta = metros[slug];
+  if (meta?.name) {
+    metroSelect.value = meta.name;
+    metroSelect.dataset.slug = slug;
+  } else {
+    metroSelect.value = slug;
+    metroSelect.dataset.slug = slug;
+  }
+  loadMetro(slug);
 }
 
 function loadMetro(slug) {
