@@ -8,10 +8,15 @@
 </head>
 <body>
   <div id="controls">
+    <div id="controlsHeader">
+      <span>Controls</span>
+      <button id="controlsToggle" type="button" aria-expanded="true">Minimize</button>
+    </div>
     <details class="control-section" open>
       <summary class="section-title">Location</summary>
-      <input id="metroSelect" list="metroOptions" title="Choose a metro area to view" placeholder="Search metro">
-      <datalist id="metroOptions"></datalist>
+      <input id="metroSelect" title="Choose a metro area to view" placeholder="Search metro">
+      <div id="metroDropdown" class="metro-dropdown" role="listbox"></div>
+      <button id="goHomeBtn" type="button">Go Home</button>
     </details>
     <details class="control-section" open>
       <summary class="section-title">Layer</summary>
@@ -48,7 +53,7 @@
       <summary class="section-title">Colors</summary>
       <label class="control-group" title="Color used for the low end of the scale">
         Low color
-        <input id="colorLow" type="color" value="#b10026">
+        <input id="colorLow" type="color" value="#00e05a">
         <span id="colorLowValue"></span>
         <input id="stopLow" type="range" min="0" max="100" step="1" value="0">
       </label>
@@ -60,7 +65,7 @@
       </label>
       <label class="control-group" title="Color used for the high end of the scale">
         High color
-        <input id="colorHigh" type="color" value="#006837">
+        <input id="colorHigh" type="color" value="#b10026">
         <span id="colorHighValue"></span>
         <input id="stopHigh" type="range" min="0" max="100" step="1" value="100">
       </label>

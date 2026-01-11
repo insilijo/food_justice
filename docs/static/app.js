@@ -30,9 +30,9 @@ let state = {
     low: 0,
     mid: 0.5,
     high: 1,
-    colorLow: "#b10026",
+    colorLow: "#00e05a",
     colorMid: "#ffffbf",
-    colorHigh: "#006837"
+    colorHigh: "#b10026"
   }
 };
 
@@ -136,32 +136,60 @@ function initUI() {
   };
 
   const metroSelect = document.getElementById("metroSelect");
-  const metroOptions = document.getElementById("metroOptions");
+  const metroDropdown = document.getElementById("metroDropdown");
+  const goHomeBtn = document.getElementById("goHomeBtn");
+  const controls = document.getElementById("controls");
+  const controlsHeader = document.getElementById("controlsHeader");
+  const controlsToggle = document.getElementById("controlsToggle");
   const metros = manifest.metros || {};
   const metroIndex = buildMetroIndex(metros);
-  Object.entries(metros).forEach(([slug, meta]) => {
-    if (!metroOptions) return;
-    const opt = document.createElement("option");
-    opt.value = meta.name;
-    opt.dataset.slug = slug;
-    metroOptions.appendChild(opt);
-  });
-  metroSelect.onchange = e => {
-    const slug = resolveMetroSlug(e.target.value, metroIndex);
-    if (slug) setMetroSelection(slug, metros, metroSelect);
+  const metroEntries = Object.entries(metros).map(([slug, meta]) => ({
+    slug,
+    name: meta?.name || slug
+  }));
+  metroSelect.oninput = e => {
+    renderMetroDropdown(metroDropdown, metroEntries, e.target.value);
+    openMetroDropdown(metroDropdown);
+  };
+  metroSelect.onfocus = e => {
+    renderMetroDropdown(metroDropdown, metroEntries, e.target.value);
+    openMetroDropdown(metroDropdown);
+  };
+  metroSelect.onkeydown = e => {
+    if (e.key === "Enter") {
+      const slug = resolveMetroSlug(e.target.value, metroIndex);
+      if (slug) setMetroSelection(slug, metros, metroSelect, metroDropdown);
+    }
   };
   metroSelect.onblur = e => {
     const slug = resolveMetroSlug(e.target.value, metroIndex);
-    if (slug) setMetroSelection(slug, metros, metroSelect);
+    if (slug) setMetroSelection(slug, metros, metroSelect, metroDropdown);
+    setTimeout(() => closeMetroDropdown(metroDropdown), 150);
   };
+  if (metroDropdown) {
+    metroDropdown.onmousedown = e => e.preventDefault();
+  }
+  if (goHomeBtn) {
+    goHomeBtn.onclick = () => goHome(metros, metroSelect, metroIndex, metroDropdown);
+  }
+  if (controlsToggle && controls) {
+    controlsToggle.onclick = () => {
+      const isCollapsed = controls.classList.toggle("controls-collapsed");
+      controlsToggle.textContent = isCollapsed ? "Expand" : "Minimize";
+      controlsToggle.setAttribute("aria-expanded", String(!isCollapsed));
+      if (isCollapsed) closeMetroDropdown(metroDropdown);
+    };
+  }
+  if (controlsHeader && controls) {
+    enableDrag(controls, controlsHeader);
+  }
 
   const first = Object.keys(metros)[0];
   if (!first) {
     console.warn("No metros found in manifest.json");
     return;
   }
-  setMetroSelection(first, metros, metroSelect);
-  chooseNearestMetro(metros, metroSelect, metroIndex);
+  setMetroSelection(first, metros, metroSelect, metroDropdown);
 
   timeModeSelect.innerHTML = "";
   [
@@ -183,7 +211,7 @@ function initUI() {
   };
 }
 
-function chooseNearestMetro(metros, metroSelect, metroIndex) {
+function goHome(metros, metroSelect, metroIndex, metroDropdown) {
   if (!navigator.geolocation) return;
   const entries = Object.entries(metros);
   if (!entries.length) return;
@@ -193,11 +221,11 @@ function chooseNearestMetro(metros, metroSelect, metroIndex) {
       if (typeof latitude !== "number" || typeof longitude !== "number") return;
       const nearest = nearestMetroSlug(entries, latitude, longitude);
       if (nearest && resolveMetroSlug(metroSelect.value, metroIndex) !== nearest) {
-        setMetroSelection(nearest, metros, metroSelect);
+        setMetroSelection(nearest, metros, metroSelect, metroDropdown);
       }
     },
     () => {},
-    { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+    { enableHighAccuracy: false, maximumAge: 60000, timeout: 8000 }
   );
 }
 
@@ -248,7 +276,7 @@ function resolveMetroSlug(value, index) {
   return null;
 }
 
-function setMetroSelection(slug, metros, metroSelect) {
+function setMetroSelection(slug, metros, metroSelect, metroDropdown) {
   const meta = metros[slug];
   if (meta?.name) {
     metroSelect.value = meta.name;
@@ -257,7 +285,82 @@ function setMetroSelection(slug, metros, metroSelect) {
     metroSelect.value = slug;
     metroSelect.dataset.slug = slug;
   }
+  closeMetroDropdown(metroDropdown);
   loadMetro(slug);
+}
+
+function openMetroDropdown(el) {
+  if (el) el.classList.add("open");
+}
+
+function closeMetroDropdown(el) {
+  if (el) el.classList.remove("open");
+}
+
+function renderMetroDropdown(el, entries, query) {
+  if (!el) return;
+  const q = String(query || "").trim().toLowerCase();
+  const matches = [];
+  const others = [];
+  entries.forEach(entry => {
+    const hay = `${entry.name} ${entry.slug}`.toLowerCase();
+    if (!q || hay.includes(q)) {
+      matches.push(entry);
+    } else {
+      others.push(entry);
+    }
+  });
+  el.innerHTML = "";
+  const addOption = entry => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "metro-option";
+    btn.textContent = entry.name;
+    btn.dataset.slug = entry.slug;
+    btn.onclick = () => setMetroSelection(entry.slug, manifest.metros, document.getElementById("metroSelect"), el);
+    el.appendChild(btn);
+  };
+  if (!q) {
+    matches.forEach(addOption);
+    return;
+  }
+  matches.forEach(addOption);
+  if (matches.length && others.length) {
+    const divider = document.createElement("hr");
+    divider.className = "metro-divider";
+    el.appendChild(divider);
+  }
+  others.forEach(addOption);
+}
+
+function enableDrag(panel, handle) {
+  let startX = 0;
+  let startY = 0;
+  let originLeft = 0;
+  let originTop = 0;
+  let dragging = false;
+  handle.addEventListener("mousedown", e => {
+    if (e.target && e.target.id === "controlsToggle") return;
+    dragging = true;
+    const rect = panel.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    originLeft = rect.left;
+    originTop = rect.top;
+    document.body.style.userSelect = "none";
+  });
+  window.addEventListener("mousemove", e => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    panel.style.left = `${originLeft + dx}px`;
+    panel.style.top = `${originTop + dy}px`;
+  });
+  window.addEventListener("mouseup", () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = "";
+  });
 }
 
 function loadMetro(slug) {
@@ -391,6 +494,10 @@ function loadBoundary(meta) {
         style: { color: "#000", weight: 2, opacity: 1, fillOpacity: 0 }
       }).addTo(map);
       layerControl.addOverlay(boundaryLayer, "Metro boundary");
+      const bounds = boundaryLayer.getBounds();
+      if (bounds && bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [16, 16] });
+      }
     });
 }
 
@@ -504,7 +611,7 @@ function layerRange(data, metric) {
 
 function loadLayer() {
   if (!state.metro || !state.geo || !state.mode) return;
-  if (state.timeMode === "fixed" && !state.minutes) return;
+  if (!state.minutes) return;
   updateMetricOptions();
 
   if (currentLayer) {

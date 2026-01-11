@@ -22,6 +22,7 @@ for metro in sorted([p for p in DATA_ROOT.iterdir() if p.is_dir()]):
         continue
     g = gpd.read_file(boundary).to_crs(4326)
     center, zoom = center_zoom(g.total_bounds)
+    zoom = min(13, zoom + 1)
 
     geos, modes, mins = set(), set(), set()
     for f in metro.glob("*.geojson"):
