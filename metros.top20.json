@@ -364,6 +364,9 @@
         "Aurora, CO, USA",
         "Centennial, CO, USA"
       ],
+      "place_osmids": {
+        "Aurora, CO, USA": "R112875"
+      },
       "zoom": 10,
       "boundaries": {
         "zcta_path": "data_inputs/zcta_us.gpkg",

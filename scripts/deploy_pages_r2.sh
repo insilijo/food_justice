@@ -10,6 +10,24 @@ STASH_DIR="${STASH_DIR:-data_cache/r2-data}"
 CREATE_BUCKET="${CREATE_BUCKET:-0}"
 UPDATE_DATA="${UPDATE_DATA:-0}"
 SKIP_EXISTING_PREFIXES="${SKIP_EXISTING_PREFIXES:-1}"
+FORCE_AREAS="${FORCE_AREAS:-}"
+ONLY_AREAS="${ONLY_AREAS:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force-areas)
+      FORCE_AREAS="${2:-}"
+      shift 2
+      ;;
+    --only-areas)
+      ONLY_AREAS="${2:-}"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ "$UPDATE_DATA" == "1" ]]; then
   if [[ ! -d "$DATA_DIR" ]]; then
@@ -107,14 +125,31 @@ PY
 
 if [[ "$UPDATE_DATA" == "1" ]]; then
   declare -A prefix_cache=()
+  declare -A force_set=()
+  declare -A only_set=()
+  IFS=',' read -r -a force_items <<< "$FORCE_AREAS"
+  for area in "${force_items[@]}"; do
+    area="$(echo "$area" | xargs)"
+    [[ -n "$area" ]] && force_set["$area"]=1
+  done
+  IFS=',' read -r -a only_items <<< "$ONLY_AREAS"
+  for area in "${only_items[@]}"; do
+    area="$(echo "$area" | xargs)"
+    [[ -n "$area" ]] && only_set["$area"]=1
+  done
   find "$DATA_DIR" -type f -print0 | while IFS= read -r -d '' f; do
     key="${f#${DOCS_DIR}/}"
     if [[ "$SKIP_EXISTING_PREFIXES" == "1" ]] && [[ "$key" == data/* ]]; then
       rest="${key#data/}"
       top="${rest%%/*}"
       if [[ "$rest" != "$top" ]]; then
+        if [[ "${#only_set[@]}" -gt 0 ]] && [[ -z "${only_set[$top]+x}" ]]; then
+          continue
+        fi
         prefix="data/${top}/"
-        if [[ -z "${prefix_cache[$prefix]+x}" ]]; then
+        if [[ -n "${force_set[$top]+x}" ]]; then
+          prefix_cache[$prefix]=0
+        elif [[ -z "${prefix_cache[$prefix]+x}" ]]; then
           if prefix_exists "$prefix"; then
             prefix_cache[$prefix]=1
             echo "Skipping existing prefix: $prefix"

@@ -614,28 +614,46 @@ def _place_slug(place_name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", place_name.lower()).strip("_")
     return slug or "place"
 
-def _load_place_polygon(place_name: str, place_dir: Path | None) -> gpd.GeoDataFrame:
+def _load_place_polygon(place_name: str, place_dir: Path | None, place_osmid: str | None) -> gpd.GeoDataFrame:
     if place_dir:
-        place_path = place_dir / f"{_place_slug(place_name)}.geojson"
+        suffix = f"_osmid_{place_osmid}" if place_osmid else ""
+        place_path = place_dir / f"{_place_slug(place_name)}{suffix}.geojson"
         if place_path.exists():
             info(f"Loading cached place polygon for {place_name} from {place_path}")
             return gpd.read_file(place_path).to_crs(4326)
     info(f"Geocoding place polygon for {place_name}...")
-    gdf = ox.geocode_to_gdf(place_name).to_crs(4326)
+    if place_osmid:
+        try:
+            gdf = ox.geocode_to_gdf(place_osmid, by_osmid=True).to_crs(4326)
+        except Exception:
+            warn(f"OSM ID lookup failed for {place_name} ({place_osmid}); falling back to name.")
+            gdf = ox.geocode_to_gdf(place_name).to_crs(4326)
+    else:
+        gdf = ox.geocode_to_gdf(place_name).to_crs(4326)
     if place_dir:
-        place_path = place_dir / f"{_place_slug(place_name)}.geojson"
+        suffix = f"_osmid_{place_osmid}" if place_osmid else ""
+        place_path = place_dir / f"{_place_slug(place_name)}{suffix}.geojson"
         try:
             gdf.to_file(place_path, driver="GeoJSON")
         except Exception:
             pass
     return gdf
 
-def load_place_polygons(place_names: list[str], place_dir: Path | None = None) -> list[gpd.GeoDataFrame]:
+def load_place_polygons(
+    place_names: list[str],
+    place_dir: Path | None = None,
+    place_osmids: dict[str, str] | None = None,
+) -> list[gpd.GeoDataFrame]:
     info(f"Geocoding {len(place_names)} place polygons for metro boundary...")
-    return [_load_place_polygon(p, place_dir) for p in place_names]
+    place_osmids = place_osmids or {}
+    return [_load_place_polygon(p, place_dir, place_osmids.get(p)) for p in place_names]
 
-def metro_boundary_from_places(place_names: list[str], place_dir: Path | None = None) -> gpd.GeoDataFrame:
-    gdfs = load_place_polygons(place_names, place_dir=place_dir)
+def metro_boundary_from_places(
+    place_names: list[str],
+    place_dir: Path | None = None,
+    place_osmids: dict[str, str] | None = None,
+) -> gpd.GeoDataFrame:
+    gdfs = load_place_polygons(place_names, place_dir=place_dir, place_osmids=place_osmids)
     geom = unary_union([g.geometry.values[0] for g in gdfs])
     return gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[geom], crs="EPSG:4326")
 
@@ -713,7 +731,8 @@ def build_one_metro(
     # 1) Metro boundary
     place_dir = out_dir / "places"
     place_dir.mkdir(parents=True, exist_ok=True)
-    place_gdfs = load_place_polygons(meta["places"], place_dir=place_dir)
+    place_osmids = meta.get("place_osmids", {}) or {}
+    place_gdfs = load_place_polygons(meta["places"], place_dir=place_dir, place_osmids=place_osmids)
     metro_geom_union = unary_union([g.geometry.values[0] for g in place_gdfs])
     metro_gdf = gpd.GeoDataFrame({"name": ["metro_boundary"]}, geometry=[metro_geom_union], crs="EPSG:4326")
     metro_poly_4326 = metro_geom_union
