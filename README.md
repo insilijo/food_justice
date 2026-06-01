@@ -12,4 +12,15 @@
 5) Generate manifest:
    python scripts/generate_manifest.py
 
-Deploy `docs/` with GitHub Pages.
+## Data & hosting
+Large data (`docs/data/`, `data_inputs/`, `data_cache/`, GTFS) is **not stored
+in git** — it exceeded the Git LFS quota. It is regenerated locally with the
+build step above and hosted on **Cloudflare R2** for production. To publish:
+
+```
+DATA_BASE_URL=<r2-public-url> UPDATE_DATA=1 scripts/deploy_pages_r2.sh
+```
+
+This uploads the local `docs/data/` to R2, injects the R2 URL into the
+`data-base-url` meta tag, and deploys `docs/` to Cloudflare Pages. (The repo no
+longer hosts on GitHub Pages.)
