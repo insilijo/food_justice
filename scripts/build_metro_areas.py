@@ -36,7 +36,7 @@ from shapely.geometry import box
 from shapely.ops import unary_union, transform
 from tqdm.auto import tqdm
 
-WALK_METERS_PER_MIN = 75  # ~4.5 km/h
+WALK_METERS_PER_MIN = 50  # ~3.0 km/h (conservative pace for older adults/caregivers)
 GTFS_WALK_RADIUS_M = 400  # meters around stops to consider grocery access
 GTFS_START_TIME = 17 * 3600
 GTFS_END_TIME = 19 * 3600
@@ -105,7 +105,19 @@ def ego_isochrone_union(
 
 def get_osm_groceries(poly_4326):
     feats = ox.features_from_polygon(poly_4326, {"shop": ["supermarket", "grocery"]})
-    return feats[feats.geometry.type == "Point"].copy()
+    if feats.empty:
+        return feats.copy()
+    # Keep point-mapped shops and convert area-mapped shops to centroids
+    # so supermarkets tagged as building footprints are not dropped.
+    point_like = feats[feats.geometry.type == "Point"].copy()
+    area_like = feats[feats.geometry.type.isin(["Polygon", "MultiPolygon"])].copy()
+    if not area_like.empty:
+        area_like = area_like.to_crs(3857)
+        area_like["geometry"] = area_like.geometry.centroid
+        area_like = area_like.to_crs(4326)
+    merged = pd.concat([point_like, area_like], axis=0)
+    merged = gpd.GeoDataFrame(merged, geometry="geometry", crs="EPSG:4326")
+    return merged
 
 def get_osm_transit(poly_4326):
     tags = {
@@ -936,9 +948,18 @@ def build_one_metro(
     vehicle_rows = []
     housing_rows = []
     for (s, c) in tqdm(uniq_counties, desc=f"{slug}: ACS tract commute/vehicles", unit="county"):
-        commute_rows.append(fetch_tract_commute_by_county(year, s, c, api_key))
-        vehicle_rows.append(fetch_tract_vehicle_by_county(year, s, c, api_key))
-        housing_rows.append(fetch_tract_housing_by_county(year, s, c, api_key))
+        try:
+            commute_rows.append(fetch_tract_commute_by_county(year, s, c, api_key))
+        except Exception as exc:
+            warn(f"{slug}: commute ACS fetch failed for county {s}{c}; continuing without it ({exc})")
+        try:
+            vehicle_rows.append(fetch_tract_vehicle_by_county(year, s, c, api_key))
+        except Exception as exc:
+            warn(f"{slug}: vehicle ACS fetch failed for county {s}{c}; continuing without it ({exc})")
+        try:
+            housing_rows.append(fetch_tract_housing_by_county(year, s, c, api_key))
+        except Exception as exc:
+            warn(f"{slug}: housing ACS fetch failed for county {s}{c}; continuing without it ({exc})")
 
     commute_df = (
         pd.concat(commute_rows, ignore_index=True).drop_duplicates("GEOID")
